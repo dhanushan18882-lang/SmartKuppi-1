@@ -36,12 +36,14 @@ exports.uploadResourceFile = upload.single('file');
 exports.createResource = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { title, description, fileType } = req.body;
-    const course = await Course.findById(courseId);
-    if (!course) {
+    const { title, description, fileType, category } = req.body;
+    const course = courseId !== 'none' ? await Course.findById(courseId) : null;
+    
+    if (courseId !== 'none' && !course) {
       return res.status(404).json({ success: false, message: 'Course not found' });
     }
-    if (course.tutor.toString() !== req.user.id && req.user.role !== 'admin') {
+    
+    if (course && course.tutor.toString() !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
@@ -56,7 +58,8 @@ exports.createResource = async (req, res) => {
       description: description || '',
       fileUrl,
       fileType: fileType || 'other',
-      course: courseId,
+      category: category || 'lecture_material',
+      course: courseId !== 'none' ? courseId : undefined,
       uploadedBy: req.user.id
     });
 
@@ -101,7 +104,7 @@ exports.deleteResource = async (req, res) => {
   try {
     const resource = await Resource.findById(req.params.id).populate('course');
     if (!resource) return res.status(404).json({ success: false, message: 'Resource not found' });
-    if (resource.course.tutor.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (resource.course && resource.course.tutor.toString() !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
@@ -128,6 +131,21 @@ exports.incrementDownload = async (req, res) => {
     resource.downloads += 1;
     await resource.save();
     res.json({ success: true, downloads: resource.downloads });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get all resources
+// @route   GET /api/resources/common
+// @access  Private
+exports.getCommonResources = async (req, res) => {
+  try {
+    const resources = await Resource.find()
+      .sort('-createdAt')
+      .populate('uploadedBy', 'name');
+    
+    res.json({ success: true, data: resources });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

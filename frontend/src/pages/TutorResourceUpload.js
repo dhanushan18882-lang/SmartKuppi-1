@@ -18,6 +18,7 @@ const TutorResourceUpload = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [courseTitle, setCourseTitle] = useState('');
+  const [category, setCategory] = useState('lecture_material');
 
   useEffect(() => {
     if (!courseId) {
@@ -70,6 +71,7 @@ const TutorResourceUpload = () => {
     formData.append('title', title);
     formData.append('description', description);
     formData.append('fileType', fileType);
+    formData.append('category', category);
 
     try {
       const res = await fetch(`${API_BASE_URL}/resources/courses/${courseId}/resources`, {
@@ -165,12 +167,25 @@ const TutorResourceUpload = () => {
             <select
               value={fileType}
               onChange={e => setFileType(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl focus:outline-none transition-all"
             >
               <option value="pdf">PDF</option>
               <option value="video">Video</option>
               <option value="image">Image</option>
               <option value="link">Link (will be stored as a URL)</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Category</label>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl focus:outline-none transition-all"
+            >
+              <option value="lecture_material">Lecture Material</option>
+              <option value="past_paper">Past Paper</option>
+              <option value="paper_discussion">Paper Discussion</option>
               <option value="other">Other</option>
             </select>
           </div>

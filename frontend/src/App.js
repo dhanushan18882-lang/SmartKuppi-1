@@ -21,6 +21,7 @@ import DiscussionForum from './pages/DiscussionForum';
 import StudentCourses from './pages/StudentCourses'; 
 import StudentSchedule from './pages/StudentSchedule';
 import TutorSchedule from './pages/TutorSchedule';
+import Resources from './pages/Resources';
 
 
 
@@ -56,6 +57,7 @@ const AppRoutes = () => {
       <Route path="/browse-courses" element={<BrowseCourses onBack={() => navigate(-1)} />} />
       <Route path="/discussions" element={<DiscussionForum onBack={() => navigate(-1)} />} />
       <Route path="/schedule" element={<StudentSchedule onBack={() => navigate(-1)} />} />
+      <Route path="/resources" element={<Resources onBack={() => navigate(-1)} />} />
 
     </Routes>
   );

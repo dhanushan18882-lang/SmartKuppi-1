@@ -5,6 +5,7 @@ const resourceController = require('../controllers/resourceController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 // Upload and get resources for a course
+router.get('/common', protect, resourceController.getCommonResources);
 router.post('/courses/:courseId/resources', protect, authorize('tutor', 'admin'), resourceController.uploadResourceFile, resourceController.createResource);
 router.get('/courses/:courseId/resources', protect, resourceController.getCourseResources);
 
