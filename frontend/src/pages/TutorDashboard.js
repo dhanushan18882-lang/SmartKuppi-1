@@ -433,7 +433,18 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
           <AnimatePresence mode="wait">
             {activeView === 'dashboard' && <DashboardView key="dashboard" />}
-            {activeView === 'courses' && <TutorCourses key="courses" onBack={() => setActiveView('dashboard')} />}
+            {activeView === 'courses' && (
+              <TutorCourses 
+                key="courses" 
+                onBack={(view) => {
+                  if (view === 'create-course') {
+                    setActiveView('create-course');
+                  } else {
+                    setActiveView('dashboard');
+                  }
+                }} 
+              />
+            )}
             {activeView === 'schedule' && <TutorSchedule key="schedule" onBack={() => setActiveView('dashboard')} />}
             {activeView === 'create-course' && <TutorCourseCreate key="create-course" onBack={() => setActiveView('dashboard')} />}
             {activeView === 'messages' && <TutorMessages key="messages" onBack={() => setActiveView('dashboard')} />}

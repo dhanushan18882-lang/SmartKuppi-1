@@ -55,13 +55,13 @@ const TutorCourses = ({ onBack = () => {} }) => {
             <p className="text-slate-500 mt-1">Manage the courses you've created.</p>
           </div>
         </div>
-        <Link
-          to="/tutor/create-course"
-          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
-        >
-          <Plus className="h-5 w-5" />
-          <span>Create New Course</span>
-        </Link>
+          <button
+            onClick={() => onBack('create-course')}
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Create New Course</span>
+          </button>
       </div>
 
       {/* Empty state or course grid */}
@@ -70,13 +70,13 @@ const TutorCourses = ({ onBack = () => {} }) => {
           <FolderOpen className="h-16 w-16 text-slate-300 mx-auto mb-4" />
           <h3 className="text-xl font-bold text-slate-900 mb-2">No courses yet</h3>
           <p className="text-slate-500 mb-6">Create your first course to start teaching.</p>
-          <Link
-            to="/tutor/create-course"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20"
-          >
-            <Plus className="h-5 w-5" />
-            Create New Course
-          </Link>
+            <button
+              onClick={() => onBack('create-course')}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20"
+            >
+              <Plus className="h-5 w-5" />
+              Create New Course
+            </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -6,44 +6,130 @@ import {
   Eye, EyeOff, AlertCircle, CheckCircle, 
   Briefcase, ChevronRight, ArrowLeft,
   Building2, School, Calendar, Globe,
-  Award, Sparkles
+  Award, Sparkles, X
 } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:5000/api/auth'; // Your backend URL
+const API_BASE_URL = 'http://localhost:5000/api/auth';
 
 const Register = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [userType, setUserType] = useState('student'); // Removed TypeScript type
+  const [userType, setUserType] = useState('student');
   const [formData, setFormData] = useState({
-    // Common fields
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
     phone: '',
-    
-    // Student specific
     studentId: '',
     university: '',
     faculty: '',
     department: '',
     academicYear: '',
-    
-    // Tutor specific
     qualifications: '',
     specialization: '',
     yearsOfExperience: '',
     bio: '',
     linkedin: '',
-    subjects: [] // Removed TypeScript annotation
+    subjects: []
   });
   
-  const [errors, setErrors] = useState({}); // Removed TypeScript type
+  const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  
+  // Password strength state
+  const [passwordStrength, setPasswordStrength] = useState({
+    score: 0,
+    text: '',
+    color: '',
+    checks: {
+      length: false,
+      uppercase: false,
+      lowercase: false,
+      number: false,
+      special: false
+    }
+  });
+
+  // Phone validation helper
+  const validatePhone = (phone) => {
+    const phoneRegex = /^0[0-9]{9}$/;
+    return phoneRegex.test(phone);
+  };
+
+  // Password strength checker
+  const checkPasswordStrength = (password) => {
+    const checks = {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    };
+    
+    const passedCount = Object.values(checks).filter(Boolean).length;
+    
+    let score = 0;
+    let text = '';
+    let color = '';
+    
+    if (password.length === 0) {
+      text = '';
+      score = 0;
+    } else if (passedCount <= 2) {
+      score = 1;
+      text = 'Weak';
+      color = 'text-rose-500 bg-rose-50';
+    } else if (passedCount === 3) {
+      score = 2;
+      text = 'Fair';
+      color = 'text-amber-500 bg-amber-50';
+    } else if (passedCount === 4) {
+      score = 3;
+      text = 'Good';
+      color = 'text-blue-500 bg-blue-50';
+    } else {
+      score = 4;
+      text = 'Strong';
+      color = 'text-emerald-500 bg-emerald-50';
+    }
+    
+    return { score, text, color, checks, passedCount };
+  };
+
+  // Update password strength when password changes
+  useEffect(() => {
+    if (formData.password) {
+      setPasswordStrength(checkPasswordStrength(formData.password));
+    } else {
+      setPasswordStrength({
+        score: 0,
+        text: '',
+        color: '',
+        checks: {
+          length: false,
+          uppercase: false,
+          lowercase: false,
+          number: false,
+          special: false
+        }
+      });
+    }
+  }, [formData.password]);
+
+  // Real-time confirm password validation
+  useEffect(() => {
+    if (formData.confirmPassword && formData.password !== formData.confirmPassword) {
+      setErrors(prev => ({ ...prev, confirmPassword: 'Passwords do not match' }));
+    } else if (formData.confirmPassword && formData.password === formData.confirmPassword) {
+      setErrors(prev => ({ ...prev, confirmPassword: null }));
+    }
+  }, [formData.password, formData.confirmPassword]);
 
   const universities = [
     'Sri Lanka Institute of Information Technology - SLIIT',
@@ -74,7 +160,7 @@ const Register = () => {
   ];
 
   const validateForm = () => {
-    const newErrors = {}; // Removed TypeScript type
+    const newErrors = {};
 
     if (!formData.name) newErrors.name = 'Full name is required';
     
@@ -86,8 +172,10 @@ const Register = () => {
     
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    } else if (passwordStrength.score < 2) {
+      newErrors.password = 'Password is too weak. Use uppercase, lowercase, numbers, or special characters';
     }
     
     if (formData.password !== formData.confirmPassword) {
@@ -96,6 +184,8 @@ const Register = () => {
     
     if (!formData.phone) {
       newErrors.phone = 'Phone number is required';
+    } else if (!validatePhone(formData.phone)) {
+      newErrors.phone = 'Phone number must start with 0 and contain exactly 10 digits';
     }
 
     if (userType === 'student') {
@@ -119,7 +209,7 @@ const Register = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (e) => { // Removed TypeScript type
+  const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
@@ -133,7 +223,7 @@ const Register = () => {
     }
   };
 
-  const handleSubjectToggle = (subject) => { // Removed TypeScript type
+  const handleSubjectToggle = (subject) => {
     let updatedSubjects = [...formData.subjects];
     if (updatedSubjects.includes(subject)) {
       updatedSubjects = updatedSubjects.filter(s => s !== subject);
@@ -156,12 +246,10 @@ const Register = () => {
     setIsLoading(true);
     
     try {
-      // Determine which endpoint to use based on user type
       const endpoint = userType === 'student' 
         ? `${API_BASE_URL}/register/student`
         : `${API_BASE_URL}/register/tutor`;
       
-      // Prepare the data based on user type
       let userData;
       
       if (userType === 'student') {
@@ -177,7 +265,6 @@ const Register = () => {
           academicYear: formData.academicYear
         };
       } else {
-        // Make sure yearsOfExperience is a number
         const yearsExp = parseInt(formData.yearsOfExperience) || 0;
         
         userData = {
@@ -194,9 +281,6 @@ const Register = () => {
         };
       }
       
-      console.log('Sending data:', userData); // For debugging
-      
-      // Make the API call
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -208,14 +292,10 @@ const Register = () => {
       const data = await response.json();
       
       if (data.success) {
-        // Registration successful
         setRegistrationSuccess(true);
-        
-        // Store user data in localStorage
         localStorage.setItem('user', JSON.stringify(data.user));
         localStorage.setItem('token', data.token);
         
-        // Redirect based on user type
         if (userType === 'student') {
           setTimeout(() => navigate('/student-dashboard'), 2000);
         } else {
@@ -224,17 +304,22 @@ const Register = () => {
           }), 3000);
         }
       } else {
-        // Handle validation errors from backend
-        if (data.errors) {
-          // Format validation errors
+        if (data.message) {
+          if (data.message.includes('Email already registered')) {
+            setErrors({ email: 'Email already registered. Please use a different email or login.' });
+          } else if (data.message.includes('Student ID already exists')) {
+            setErrors({ studentId: 'Student ID already exists. Please check your Student ID.' });
+          } else {
+            alert(data.message);
+          }
+        } else if (data.errors) {
           const apiErrors = {};
           data.errors.forEach(err => {
             apiErrors[err.param] = err.msg;
           });
           setErrors(apiErrors);
         } else {
-          // Show general error message
-          alert(data.message || 'Registration failed. Please try again.');
+          alert('Registration failed. Please try again.');
         }
       }
     } catch (error) {
@@ -277,7 +362,6 @@ const Register = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans">
-      {/* Background Decorative Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-100 rounded-full blur-[120px] opacity-50"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100 rounded-full blur-[120px] opacity-50"></div>
@@ -289,7 +373,6 @@ const Register = () => {
         className="max-w-6xl w-full bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-200/50 overflow-hidden flex flex-col lg:flex-row relative z-10 border border-white"
       >
         {/* Left Side - Branding & Info */}
-        {/* FIXED: Changed bg-linear-to-br to bg-gradient-to-br */}
         <div className="lg:w-4/12 bg-gradient-to-br from-indigo-600 to-indigo-800 p-12 text-white flex flex-col justify-between relative overflow-hidden">
           <div className="relative z-10">
             <Link to="/login" className="flex items-center space-x-2 text-indigo-200 hover:text-white transition-colors mb-12 group">
@@ -330,7 +413,6 @@ const Register = () => {
             </div>
           </div>
 
-          {/* Decorative Elements */}
           <div className="absolute top-[-20%] right-[-20%] w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
           <div className="absolute bottom-[-10%] left-[-10%] w-48 h-48 bg-indigo-400/20 rounded-full blur-2xl"></div>
         </div>
@@ -344,7 +426,6 @@ const Register = () => {
                 <p className="text-slate-500 font-medium">Join our community of learners and educators.</p>
               </div>
               
-              {/* User Type Switcher */}
               <div className="flex bg-slate-100 p-1.5 rounded-2xl">
                 <button
                   onClick={() => setUserType('student')}
@@ -446,7 +527,52 @@ const Register = () => {
                         {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
-                    {errors.password && <p className="text-[10px] font-bold text-rose-500 ml-1">{errors.password}</p>}
+                    
+                    {formData.password && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-300 ${
+                                passwordStrength.score >= 1 ? 'bg-rose-500' : ''
+                              } ${passwordStrength.score >= 2 ? 'bg-amber-500' : ''} ${
+                                passwordStrength.score >= 3 ? 'bg-blue-500' : ''
+                              } ${passwordStrength.score >= 4 ? 'bg-emerald-500' : ''}`}
+                              style={{ width: `${(passwordStrength.score / 4) * 100}%` }}
+                            />
+                          </div>
+                          {passwordStrength.text && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passwordStrength.color}`}>
+                              {passwordStrength.text}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-1 text-[10px]">
+                          <div className={`flex items-center gap-1 ${passwordStrength.checks.length ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {passwordStrength.checks.length ? <CheckCircle className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                            <span>8+ characters</span>
+                          </div>
+                          <div className={`flex items-center gap-1 ${passwordStrength.checks.uppercase ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {passwordStrength.checks.uppercase ? <CheckCircle className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                            <span>Uppercase</span>
+                          </div>
+                          <div className={`flex items-center gap-1 ${passwordStrength.checks.lowercase ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {passwordStrength.checks.lowercase ? <CheckCircle className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                            <span>Lowercase</span>
+                          </div>
+                          <div className={`flex items-center gap-1 ${passwordStrength.checks.number ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {passwordStrength.checks.number ? <CheckCircle className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                            <span>Number</span>
+                          </div>
+                          <div className={`flex items-center gap-1 ${passwordStrength.checks.special ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {passwordStrength.checks.special ? <CheckCircle className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                            <span>Special char</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {errors.password && <p className="text-xs text-rose-500 mt-1">{errors.password}</p>}
                   </div>
 
                   {/* Confirm Password */}
@@ -474,7 +600,13 @@ const Register = () => {
                         {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
-                    {errors.confirmPassword && <p className="text-[10px] font-bold text-rose-500 ml-1">{errors.confirmPassword}</p>}
+                    {formData.confirmPassword && !errors.confirmPassword && formData.password === formData.confirmPassword && (
+                      <div className="flex items-center gap-1 text-emerald-500 text-[10px] font-medium">
+                        <CheckCircle className="h-3 w-3" />
+                        <span>Passwords match</span>
+                      </div>
+                    )}
+                    {errors.confirmPassword && <p className="text-xs text-rose-500 mt-1">{errors.confirmPassword}</p>}
                   </div>
 
                   {/* Phone */}
@@ -492,10 +624,11 @@ const Register = () => {
                         className={`block w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 ${
                           errors.phone ? 'border-rose-100 bg-rose-50/30' : 'border-transparent focus:border-indigo-600'
                         } rounded-2xl focus:outline-none transition-all text-slate-900 font-medium placeholder:text-slate-400`}
-                        placeholder="+94 7X XXX XXXX"
+                        placeholder="0712345678"
                       />
                     </div>
-                    {errors.phone && <p className="text-[10px] font-bold text-rose-500 ml-1">{errors.phone}</p>}
+                    <p className="text-[10px] text-slate-400 mt-1">Must start with 0 and contain exactly 10 digits (e.g., 0712345678)</p>
+                    {errors.phone && <p className="text-xs text-rose-500 mt-1">{errors.phone}</p>}
                   </div>
                 </div>
               </div>
@@ -721,7 +854,23 @@ const Register = () => {
                     </div>
                   </div>
                   <span className="ml-3 text-sm font-medium text-slate-500 leading-relaxed">
-                    I agree to the <Link to="/terms" className="text-indigo-600 font-bold hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-indigo-600 font-bold hover:underline">Privacy Policy</Link>. I understand my data will be processed securely.
+                    I agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowTermsModal(true)}
+                      className="text-indigo-600 font-bold hover:underline focus:outline-none"
+                    >
+                      Terms of Service
+                    </button>
+                    {' '}and{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowPrivacyModal(true)}
+                      className="text-indigo-600 font-bold hover:underline focus:outline-none"
+                    >
+                      Privacy Policy
+                    </button>
+                    . I understand my data will be processed securely.
                   </span>
                 </label>
                 {errors.terms && <p className="text-[10px] font-bold text-rose-500 ml-1">{errors.terms}</p>}
@@ -763,6 +912,138 @@ const Register = () => {
           </div>
         </div>
       </motion.div>
+
+      {/* Terms of Service Modal */}
+      <AnimatePresence>
+        {showTermsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowTermsModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-slate-900">Terms of Service</h2>
+                <button
+                  onClick={() => setShowTermsModal(false)}
+                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <X className="h-5 w-5 text-slate-400" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)] space-y-6 text-slate-600">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">1. Acceptance of Terms</h3>
+                  <p className="text-sm leading-relaxed">By accessing or using SmartKuppi ("the Platform"), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Platform.</p>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">2. User Accounts</h3>
+                  <p className="text-sm leading-relaxed mb-2">To access certain features, you must create an account. You are responsible for:</p>
+                  <ul className="list-disc list-inside text-sm space-y-1 ml-4">
+                    <li>Maintaining the confidentiality of your account credentials</li>
+                    <li>All activities that occur under your account</li>
+                    <li>Providing accurate and complete registration information</li>
+                    <li>Notifying us immediately of any unauthorized use</li>
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">3. User Conduct</h3>
+                  <p className="text-sm leading-relaxed mb-2">You agree not to:</p>
+                  <ul className="list-disc list-inside text-sm space-y-1 ml-4">
+                    <li>Post or share inappropriate, offensive, or illegal content</li>
+                    <li>Harass, abuse, or harm other users</li>
+                    <li>Impersonate any person or entity</li>
+                    <li>Upload malicious code or viruses</li>
+                    <li>Violate any applicable laws or regulations</li>
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">4. Intellectual Property</h3>
+                  <p className="text-sm leading-relaxed">All content on SmartKuppi, including logos, designs, and course materials, is the property of SmartKuppi or its licensors. You may not copy, modify, or distribute any content without permission.</p>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">5. Tutor Responsibilities</h3>
+                  <p className="text-sm leading-relaxed">Tutors agree to provide accurate qualifications, maintain professional conduct, and deliver quality educational content. SmartKuppi reserves the right to suspend tutors who violate these terms.</p>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">6. Student Responsibilities</h3>
+                  <p className="text-sm leading-relaxed">Students agree to respect tutors and fellow students, not to share course materials without permission, and to use the Platform for legitimate educational purposes only.</p>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">7. Termination</h3>
+                  <p className="text-sm leading-relaxed">We reserve the right to suspend or terminate accounts that violate these terms or engage in inappropriate behavior, without prior notice.</p>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">8. Limitation of Liability</h3>
+                  <p className="text-sm leading-relaxed">SmartKuppi is not liable for any indirect, incidental, or consequential damages arising from your use of the Platform. We provide the service "as is" without warranties.</p>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">9. Changes to Terms</h3>
+                  <p className="text-sm leading-relaxed">We may update these terms from time to time. Continued use of the Platform after changes constitutes acceptance of the new terms.</p>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">10. Contact Us</h3>
+                  <p className="text-sm leading-relaxed">If you have any questions about these Terms, please contact us at: support@smartkuppi.com</p>
+                </div>
+                <div className="pt-4 border-t border-slate-100">
+                  <p className="text-xs text-slate-400 text-center">Last Updated: March 2026</p>
+                </div>
+              </div>
+              <div className="p-6 border-t border-slate-100 bg-slate-50">
+                <button onClick={() => setShowTermsModal(false)} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all">Close</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Privacy Policy Modal */}
+      <AnimatePresence>
+        {showPrivacyModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowPrivacyModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-slate-900">Privacy Policy</h2>
+                <button onClick={() => setShowPrivacyModal(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X className="h-5 w-5 text-slate-400" /></button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)] space-y-6 text-slate-600">
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">1. Information We Collect</h3><p className="text-sm leading-relaxed mb-2">We collect the following information:</p><ul className="list-disc list-inside text-sm space-y-1 ml-4"><li><strong>Personal Information:</strong> Name, email address, phone number, student ID, university details</li><li><strong>Account Information:</strong> Login credentials, profile information</li><li><strong>Usage Data:</strong> Courses enrolled, lessons attended, resources downloaded</li><li><strong>Communication Data:</strong> Messages sent between students and tutors</li></ul></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">2. How We Use Your Information</h3><ul className="list-disc list-inside text-sm space-y-1 ml-4"><li>To create and manage your account</li><li>To provide educational services and content</li><li>To facilitate communication between students and tutors</li><li>To improve and personalize your learning experience</li><li>To send important notifications and updates</li><li>To ensure platform security and prevent fraud</li></ul></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">3. Data Sharing</h3><p className="text-sm leading-relaxed">We do not sell your personal information. We may share your information with:</p><ul className="list-disc list-inside text-sm space-y-1 ml-4 mt-2"><li>Tutors (for enrolled courses)</li><li>Service providers who assist in platform operations</li><li>Legal authorities when required by law</li></ul></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">4. Data Security</h3><p className="text-sm leading-relaxed">We implement industry-standard security measures to protect your data, including encryption, secure servers, and regular security audits. However, no method of transmission over the internet is 100% secure.</p></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">5. Your Rights</h3><p className="text-sm leading-relaxed mb-2">You have the right to:</p><ul className="list-disc list-inside text-sm space-y-1 ml-4"><li>Access your personal information</li><li>Correct inaccurate information</li><li>Request deletion of your account and data</li><li>Opt out of marketing communications</li></ul></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">6. Data Retention</h3><p className="text-sm leading-relaxed">We retain your information as long as your account is active. If you delete your account, we will remove your personal information within 30 days, except where retention is required by law.</p></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">7. Cookies and Tracking</h3><p className="text-sm leading-relaxed">We use cookies to enhance your experience, analyze usage, and remember your preferences. You can disable cookies in your browser settings, but some features may not function properly.</p></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">8. Children's Privacy</h3><p className="text-sm leading-relaxed">SmartKuppi is intended for university students aged 18 and above. We do not knowingly collect information from minors under 18.</p></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">9. Changes to This Policy</h3><p className="text-sm leading-relaxed">We may update this Privacy Policy from time to time. We will notify you of significant changes via email or platform notification.</p></div>
+                <div><h3 className="text-lg font-bold text-slate-900 mb-3">10. Contact Us</h3><p className="text-sm leading-relaxed">If you have questions about this Privacy Policy, please contact us at:<br />Email: privacy@smartkuppi.com<br />Address: SmartKuppi, Colombo, Sri Lanka</p></div>
+                <div className="pt-4 border-t border-slate-100"><p className="text-xs text-slate-400 text-center">Last Updated: March 2026</p></div>
+              </div>
+              <div className="p-6 border-t border-slate-100 bg-slate-50"><button onClick={() => setShowPrivacyModal(false)} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all">Close</button></div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
