@@ -3,11 +3,13 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
+console.log('JWT_SECRET loaded:', process.env.JWT_SECRET ? 'Yes' : 'No');
+console.log('JWT_EXPIRE value:', process.env.JWT_EXPIRE);
 
 // ✅ Add this helper function
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '30d'
+    expiresIn: process.env.JWT_EXPIRE || '7d'  // Uses env, falls back to 7d
   });
 };
 // ... (generateToken remains same)
