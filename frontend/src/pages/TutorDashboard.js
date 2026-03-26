@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   Layout, Users, BookOpen, Calendar, Bell, Clock, BarChart3,
-  Plus, ArrowUpRight, Video, MessageSquare, DollarSign, 
+  Plus, ArrowUpRight, Video, MessageSquare, DollarSign,
   Settings, LogOut, Menu, X, FileText, Search, Star, AlertCircle,
   ChevronDown, Mail, Phone, Award, CheckCircle, XCircle, GraduationCap,
   FolderOpen, Inbox, Edit3
@@ -33,18 +33,18 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
   });
   const [upcomingLessons, setUpcomingLessons] = useState([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  
+
   const navigate = useNavigate();
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
     const token = localStorage.getItem('token');
-    
+
     if (!userData || !token) {
       navigate('/login');
       return;
     }
-    
+
     try {
       const parsedUser = JSON.parse(userData);
       if (parsedUser.role !== 'tutor') {
@@ -53,7 +53,7 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
       }
       setTutor(parsedUser);
       setTutorStatus(parsedUser.status);
-      
+
       if (parsedUser.status === 'approved') {
         fetchDashboardData(parsedUser.id, token);
       } else {
@@ -164,7 +164,7 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
   if (tutorStatus === 'pending') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-slate-100"
@@ -198,7 +198,7 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
   if (tutorStatus === 'suspended') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-slate-100"
@@ -258,7 +258,7 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
               You have {upcomingLessons.length} lessons today. Your overall rating is {stats.rating.toFixed(1)}/5.0. Keep inspiring!
             </p>
           </div>
-          <button 
+          <button
             onClick={() => setActiveView('create-course')}
             className="flex items-center space-x-2 px-6 py-3 bg-white text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all shadow-lg shadow-indigo-500/20 group"
           >
@@ -372,9 +372,8 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
               <button
                 key={link.name}
                 onClick={() => link.view && setActiveView(link.view)}
-                className={`flex items-center justify-between w-full px-4 py-3 rounded-xl transition-all text-left ${
-                  link.isActive ? 'bg-indigo-600/10 text-indigo-600 font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
+                className={`flex items-center justify-between w-full px-4 py-3 rounded-xl transition-all text-left ${link.isActive ? 'bg-indigo-600/10 text-indigo-600 font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
               >
                 <div className="flex items-center space-x-3">
                   <link.icon className="h-5 w-5" />
@@ -421,7 +420,7 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50">
                     <div className="px-4 py-3 border-b border-slate-50"><p className="text-sm font-semibold text-slate-800">{tutor?.name}</p><p className="text-xs text-slate-500">{tutor?.email}</p></div>
                     <div className="p-1"><button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-xl"><Users className="h-4 w-4" /><span>My Profile</span></button>
-                    <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-xl"><Settings className="h-4 w-4" /><span>Account Settings</span></button></div>
+                      <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-xl"><Settings className="h-4 w-4" /><span>Account Settings</span></button></div>
                     <div className="p-1 border-t border-slate-50"><button onClick={handleLogout} className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 rounded-xl"><LogOut className="h-4 w-4" /><span>Sign Out</span></button></div>
                   </motion.div>
                 )}
@@ -433,7 +432,18 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
           <AnimatePresence mode="wait">
             {activeView === 'dashboard' && <DashboardView key="dashboard" />}
-            {activeView === 'courses' && <TutorCourses key="courses" onBack={() => setActiveView('dashboard')} />}
+            {activeView === 'courses' && (
+              <TutorCourses
+                key="courses"
+                onBack={(view) => {
+                  if (view === 'create-course') {
+                    setActiveView('create-course');
+                  } else {
+                    setActiveView('dashboard');
+                  }
+                }}
+              />
+            )}
             {activeView === 'schedule' && <TutorSchedule key="schedule" onBack={() => setActiveView('dashboard')} />}
             {activeView === 'create-course' && <TutorCourseCreate key="create-course" onBack={() => setActiveView('dashboard')} />}
             {activeView === 'messages' && <TutorMessages key="messages" onBack={() => setActiveView('dashboard')} />}
