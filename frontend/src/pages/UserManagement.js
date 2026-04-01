@@ -5,7 +5,7 @@ import {
   UserCheck, UserX, Trash2, Edit2, Shield, User,
   GraduationCap, CheckCircle, XCircle, Clock, ChevronLeft,
   ArrowUpRight, Download, X, Award, BookOpen, Briefcase,
-  Building2, Calendar, Globe, Save, AlertCircle
+  Building2, Calendar, Globe, Save, AlertCircle, Eye, EyeOff
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -21,19 +21,21 @@ const UserManagement = ({ onBack }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   // Add User Form State
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     phone: '',
     role: 'student',
     // Student fields
     studentId: '',
     university: '',
     faculty: '',
-    department: '',
     academicYear: '',
     // Tutor fields
     qualifications: '',
@@ -72,6 +74,57 @@ const UserManagement = ({ onBack }) => {
     'Economics', 'Accounting'
   ];
 
+  const academicYears = [
+    '1st Year',
+    '2nd Year',
+    '3rd Year',
+    '4th Year',
+    'Postgraduate'
+  ];
+
+  // Password strength checker
+  const checkPasswordStrength = (password) => {
+    const checks = {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    };
+    
+    const passedCount = Object.values(checks).filter(Boolean).length;
+    
+    let score = 0;
+    let text = '';
+    let color = '';
+    
+    if (password.length === 0) {
+      text = '';
+      score = 0;
+    } else if (passedCount <= 2) {
+      score = 1;
+      text = 'Weak';
+      color = 'text-rose-500 bg-rose-50';
+    } else if (passedCount === 3) {
+      score = 2;
+      text = 'Fair';
+      color = 'text-amber-500 bg-amber-50';
+    } else if (passedCount === 4) {
+      score = 3;
+      text = 'Good';
+      color = 'text-blue-500 bg-blue-50';
+    } else {
+      score = 4;
+      text = 'Strong';
+      color = 'text-emerald-500 bg-emerald-50';
+    }
+    
+    return { score, text, color, checks, passedCount };
+  };
+
+  const passwordStrength = checkPasswordStrength(newUser.password);
+  const passwordsMatch = newUser.password && newUser.confirmPassword && newUser.password === newUser.confirmPassword;
+
   useEffect(() => {
     fetchUsers();
   }, [searchTerm, roleFilter, statusFilter]);
@@ -101,42 +154,157 @@ const UserManagement = ({ onBack }) => {
     }
   };
 
-  const handleAddUser = async (e) => {
+  // Validation functions
+  const validatePhone = (phone) => {
+    const phoneRegex = /^0[0-9]{9}$/;
+    return phoneRegex.test(phone);
+  };
+
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+    const handleAddUser = async (e) => {
     e.preventDefault();
-    setFormLoading(true);
     setFormError('');
+
+    // Name validation
+    if (!newUser.name.trim()) {
+        setFormError('Name is required');
+        return;
+    }
+
+    // Email validation
+    if (!newUser.email.trim()) {
+        setFormError('Email is required');
+        return;
+    }
+    if (!validateEmail(newUser.email)) {
+        setFormError('Please enter a valid email address');
+        return;
+    }
+
+    // Check if email already exists
+    const emailExists = users.some(u => u.email.toLowerCase() === newUser.email.toLowerCase());
+    if (emailExists) {
+        setFormError('A user with this email already exists');
+        return;
+    }
+
+    // Password validation
+    if (!newUser.password) {
+        setFormError('Password is required');
+        return;
+    }
+    if (newUser.password.length < 8) {
+        setFormError('Password must be at least 8 characters');
+        return;
+    }
+    if (newUser.password !== newUser.confirmPassword) {
+        setFormError('Passwords do not match');
+        return;
+    }
+
+    // Password strength validation
+    if (passwordStrength.passedCount < 3) {
+        setFormError('Password is too weak. Please use at least 8 characters with uppercase, lowercase, number, or special character.');
+        return;
+    }
+
+    // Phone validation
+    if (!newUser.phone.trim()) {
+        setFormError('Phone number is required');
+        return;
+    }
+    if (!validatePhone(newUser.phone)) {
+        setFormError('Phone number must start with 0 and be exactly 10 digits (e.g., 0712345678)');
+        return;
+    }
+
+    // Student validation
+    if (newUser.role === 'student') {
+        if (!newUser.studentId.trim()) {
+        setFormError('Student ID is required');
+        return;
+        }
+        if (!newUser.university) {
+        setFormError('University is required');
+        return;
+        }
+        if (!newUser.faculty) {
+        setFormError('Faculty is required');
+        return;
+        }
+        if (!newUser.academicYear) {
+        setFormError('Academic Year is required');
+        return;
+        }
+    }
+
+    // Tutor validation
+    if (newUser.role === 'tutor') {
+        if (!newUser.qualifications.trim()) {
+        setFormError('Qualifications are required');
+        return;
+        }
+        if (!newUser.specialization.trim()) {
+        setFormError('Specialization is required');
+        return;
+        }
+        if (!newUser.yearsOfExperience) {
+        setFormError('Years of Experience is required');
+        return;
+        }
+        if (!newUser.bio.trim()) {
+        setFormError('Bio/Introduction is required');
+        return;
+        }
+    }
+
+    setFormLoading(true);
     const token = localStorage.getItem('token');
-    
+
+    const userToSend = { ...newUser };
+    delete userToSend.confirmPassword;
+
+    if (userToSend.role === 'tutor') {
+    userToSend.status = 'approved'; // Admin-created tutors are automatically approved
+    } else if (userToSend.role === 'student') {
+    userToSend.status = 'active';
+    } else if (userToSend.role === 'admin') {
+    userToSend.status = 'active';
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/users`, {
+        const response = await fetch(`${API_BASE_URL}/admin/users`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(newUser)
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
+        body: JSON.stringify(userToSend)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
         setShowAddModal(false);
         fetchUsers();
-        // Reset form
         setNewUser({
-          name: '', email: '', password: '', phone: '', role: 'student',
-          studentId: '', university: '', faculty: '', department: '', academicYear: '',
-          qualifications: '', specialization: '', yearsOfExperience: '', bio: '', linkedin: '', subjects: []
+            name: '', email: '', password: '', confirmPassword: '', phone: '', role: 'student',
+            studentId: '', university: '', faculty: '', department: '', academicYear: '',
+            qualifications: '', specialization: '', yearsOfExperience: '', bio: '', linkedin: '', subjects: []
         });
-      } else {
+        } else {
         setFormError(data.message || 'Failed to create user');
-      }
+        }
     } catch (error) {
-      setFormError('Network error. Please try again.');
+        setFormError('Network error. Please try again.');
     } finally {
-      setFormLoading(false);
+        setFormLoading(false);
     }
-  };
+    };
 
   const handleToggleStatus = async (userId, currentStatus) => {
     const token = localStorage.getItem('token');
@@ -313,7 +481,7 @@ const UserManagement = ({ onBack }) => {
                   <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Joined Date</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Last Active</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Actions</th>
-                 </tr>
+                  </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
@@ -434,7 +602,7 @@ const UserManagement = ({ onBack }) => {
                   </div>
                 )}
 
-                {/* Basic Info */}
+                {/* Basic Info - Always visible */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Basic Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -462,14 +630,76 @@ const UserManagement = ({ onBack }) => {
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Password *</label>
-                      <input
-                        type="password"
-                        required
-                        value={newUser.password}
-                        onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                        className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
-                        placeholder="••••••••"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required
+                          value={newUser.password}
+                          onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all pr-10"
+                          placeholder="••••••••"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {newUser.password && (
+                        <div className="mt-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all duration-300 ${
+                                  passwordStrength.score === 1 ? 'w-1/4 bg-rose-500' :
+                                  passwordStrength.score === 2 ? 'w-2/4 bg-amber-500' :
+                                  passwordStrength.score === 3 ? 'w-3/4 bg-blue-500' :
+                                  passwordStrength.score === 4 ? 'w-full bg-emerald-500' : 'w-0'
+                                }`}
+                              />
+                            </div>
+                            {passwordStrength.text && (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passwordStrength.color}`}>
+                                {passwordStrength.text}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1">Use 8+ chars with uppercase, lowercase, number, or special character</p>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Confirm Password *</label>
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          required
+                          value={newUser.confirmPassword}
+                          onChange={(e) => setNewUser({...newUser, confirmPassword: e.target.value})}
+                          className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all pr-10 ${
+                            newUser.confirmPassword && !passwordsMatch
+                              ? 'border-rose-300 focus:border-rose-500'
+                              : newUser.confirmPassword && passwordsMatch
+                              ? 'border-emerald-300 focus:border-emerald-500'
+                              : 'border-transparent focus:border-brand-500'
+                          }`}
+                          placeholder="••••••••"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {newUser.confirmPassword && (
+                        <p className={`text-[10px] mt-1 ${passwordsMatch ? 'text-emerald-600' : 'text-rose-500'}`}>
+                          {passwordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Phone *</label>
@@ -479,8 +709,9 @@ const UserManagement = ({ onBack }) => {
                         value={newUser.phone}
                         onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
                         className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
-                        placeholder="+94 XX XXX XXXX"
+                        placeholder="0712345678"
                       />
+                      <p className="text-[10px] text-slate-400 mt-1">Must start with 0 and be exactly 10 digits</p>
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Role *</label>
@@ -542,22 +773,8 @@ const UserManagement = ({ onBack }) => {
                           className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
                         >
                           <option value="">Select Year</option>
-                          <option value="1st Year">1st Year</option>
-                          <option value="2nd Year">2nd Year</option>
-                          <option value="3rd Year">3rd Year</option>
-                          <option value="4th Year">4th Year</option>
-                          <option value="Postgraduate">Postgraduate</option>
+                          {academicYears.map(year => <option key={year} value={year}>{year}</option>)}
                         </select>
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Department</label>
-                        <input
-                          type="text"
-                          value={newUser.department}
-                          onChange={(e) => setNewUser({...newUser, department: e.target.value})}
-                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
-                          placeholder="Computer Science"
-                        />
                       </div>
                     </div>
                   </div>
@@ -575,7 +792,7 @@ const UserManagement = ({ onBack }) => {
                           value={newUser.qualifications}
                           onChange={(e) => setNewUser({...newUser, qualifications: e.target.value})}
                           className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
-                          placeholder="PhD in Computer Science"
+                          placeholder="B.Sc. in Computer Science"
                         />
                       </div>
                       <div>
@@ -595,17 +812,17 @@ const UserManagement = ({ onBack }) => {
                           value={newUser.yearsOfExperience}
                           onChange={(e) => setNewUser({...newUser, yearsOfExperience: e.target.value})}
                           className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
-                          placeholder="5"
+                          placeholder="3"
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Bio</label>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Bio / Introduction</label>
                         <textarea
                           rows={3}
                           value={newUser.bio}
                           onChange={(e) => setNewUser({...newUser, bio: e.target.value})}
                           className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all resize-none"
-                          placeholder="Tell us about your teaching experience..."
+                          placeholder="Tell us about your teaching style..."
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -619,10 +836,10 @@ const UserManagement = ({ onBack }) => {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Subjects</label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Subjects you can teach</label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                           {subjectsList.map(subject => (
-                            <label key={subject} className="flex items-center space-x-2 cursor-pointer">
+                            <label key={subject} className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-slate-50 rounded-lg transition-colors">
                               <input
                                 type="checkbox"
                                 checked={newUser.subjects.includes(subject)}
@@ -644,6 +861,8 @@ const UserManagement = ({ onBack }) => {
                   </div>
                 )}
 
+                {/* Admin - No additional fields */}
+
                 {/* Form Actions */}
                 <div className="flex gap-3 pt-4 border-t border-slate-100">
                   <button
@@ -653,14 +872,14 @@ const UserManagement = ({ onBack }) => {
                   >
                     Cancel
                   </button>
-                    <button
+                  <button
                     type="submit"
                     disabled={formLoading}
                     className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
+                  >
                     {formLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save className="h-4 w-4" />}
                     {formLoading ? 'Creating...' : 'Create User'}
-                    </button>
+                  </button>
                 </div>
               </form>
             </motion.div>

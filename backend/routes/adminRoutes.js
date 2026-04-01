@@ -12,11 +12,11 @@ const {
   deleteUser,
   toggleUserStatus
 } = require('../controllers/adminController');
-const { protect, authorize } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');  // ← Make sure both are imported
 
 // All admin routes require authentication and admin role
 router.use(protect);
-router.use(authorize('admin'));
+router.use(authorize('admin'));  // ← This is correct
 
 // Tutor routes
 router.get('/tutors', getTutors);

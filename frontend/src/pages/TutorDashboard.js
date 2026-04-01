@@ -1,30 +1,42 @@
 // src/pages/TutorDashboard.js
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
+import { format, isSameDay, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { 
-  Layout, Users, BookOpen, Calendar, Bell, Clock, BarChart3,
+  Layout, Users, BookOpen, Calendar as CalendarIcon, Bell, Clock, BarChart3,
   Plus, ArrowUpRight, Video, MessageSquare, DollarSign, 
   Settings, LogOut, Menu, X, FileText, Search, Star, AlertCircle,
   ChevronDown, Mail, Phone, Award, CheckCircle, XCircle, GraduationCap,
-  FolderOpen, Inbox, Edit3
+  FolderOpen, Inbox, Edit3, Upload, ExternalLink, MoreVertical,
+  Save, ChevronLeft, Filter, Link as LinkIcon, Play, User, Download
 } from 'lucide-react';
-
-import TutorCourses from './TutorCourses';
-import TutorCourseCreate from './TutorCourseCreate';
-import TutorMessages from './TutorMessages';
-import TutorSchedule from './TutorSchedule';
+import CourseCardHeader from '../components/CourseCardHeader';
+import MessageThread from '../components/MessageThread';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
-const TutorDashboard = ({ initialView = 'dashboard' }) => {
+const TutorDashboard = ({ initialView = 'dashboard', initialCourseId = null }) => {
+  const navigate = useNavigate();
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+  const urlCourseId = searchParams.get('course') || params.courseId || initialCourseId;
+
+  // UI State
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profileDropdown, setProfileDropdown] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [activeView, setActiveView] = useState(initialView);
+  const [selectedCourseId, setSelectedCourseId] = useState(urlCourseId);
+  
+  // User & auth state
   const [tutor, setTutor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tutorStatus, setTutorStatus] = useState('approved');
+  
+  // Dashboard stats
   const [stats, setStats] = useState({
     totalStudents: 0,
     totalCourses: 0,
@@ -34,8 +46,66 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
   const [upcomingLessons, setUpcomingLessons] = useState([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
   
-  const navigate = useNavigate();
-
+  // Course list (for My Courses view)
+  const [courses, setCourses] = useState([]);
+  
+  // Course detail state
+  const [courseDetail, setCourseDetail] = useState(null);
+  const [lessons, setLessons] = useState([]);
+  const [resources, setResources] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [courseDetailActiveTab, setCourseDetailActiveTab] = useState('lessons');
+  
+  // Messages state
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [loadingMessages, setLoadingMessages] = useState(true);
+  const selectedIdRef = useRef(null);
+  
+  // Schedule state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [lessonsForSchedule, setLessonsForSchedule] = useState([]);
+  const [filteredLessons, setFilteredLessons] = useState([]);
+  const [scheduleView, setScheduleView] = useState('calendar');
+  const [filterCourse, setFilterCourse] = useState('all');
+  const [coursesForFilter, setCoursesForFilter] = useState([]);
+  
+  // Create course form state
+  const [createFormData, setCreateFormData] = useState({
+    title: '',
+    subject: '',
+    description: '',
+    price: 0,
+    thumbnail: ''
+  });
+  const [createErrors, setCreateErrors] = useState({});
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState(false);
+  
+  // Lesson create state
+  const [lessonFormData, setLessonFormData] = useState({
+    title: '',
+    description: '',
+    date: '',
+    time: '',
+    duration: '60',
+    meetingLink: '',
+    meetingPassword: ''
+  });
+  const [lessonErrors, setLessonErrors] = useState({});
+  const [lessonSubmitting, setLessonSubmitting] = useState(false);
+  const [lessonSuccess, setLessonSuccess] = useState(false);
+  const [courseTitle, setCourseTitle] = useState('');
+  
+  // Resource upload state
+  const [resourceTitle, setResourceTitle] = useState('');
+  const [resourceDescription, setResourceDescription] = useState('');
+  const [resourceFile, setResourceFile] = useState(null);
+  const [resourceFileType, setResourceFileType] = useState('other');
+  const [resourceSubmitting, setResourceSubmitting] = useState(false);
+  const [resourceSuccess, setResourceSuccess] = useState(false);
+  
+  // ========== Initial auth check ==========
   useEffect(() => {
     const userData = localStorage.getItem('user');
     const token = localStorage.getItem('token');
@@ -65,10 +135,10 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
     }
   }, [navigate]);
 
+  // ========== Data fetching functions ==========
   const fetchDashboardData = async (tutorId, token) => {
     setLoading(true);
     try {
-      // Fetch tutor's courses
       const coursesRes = await fetch(`${API_BASE_URL}/courses/tutor/courses`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -82,9 +152,9 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
           totalResources: 0,
           rating: 4.9
         });
+        setCourses(courses);
       }
-
-      // Fetch unread messages
+      
       const inboxRes = await fetch(`${API_BASE_URL}/messages/inbox`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -93,8 +163,7 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
         const unread = inboxData.data.filter(m => !m.read).length;
         setUnreadMessages(unread);
       }
-
-      // Fetch upcoming lessons from all courses
+      
       const allLessons = [];
       const coursesRes2 = await fetch(`${API_BASE_URL}/courses/tutor/courses`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -132,6 +201,10 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
         totalResources: 28,
         rating: 4.9
       });
+      setCourses([
+        { _id: '1', title: 'Advanced JavaScript', subject: 'Programming', enrolledCount: 24, status: 'published' },
+        { _id: '2', title: 'React Masterclass', subject: 'Web Development', enrolledCount: 18, status: 'published' }
+      ]);
       setUpcomingLessons([
         { id: 1, title: 'Advanced JavaScript', course: 'JavaScript Mastery', date: new Date().toISOString(), time: '10:00 AM', students: 12, meetingLink: 'https://meet.google.com/xxx' },
         { id: 2, title: 'React Hooks Deep Dive', course: 'React Masterclass', date: new Date().toISOString(), time: '02:00 PM', students: 8, meetingLink: 'https://zoom.us/j/123' }
@@ -140,27 +213,1464 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    navigate('/login');
+  const fetchCourseDetail = async (courseId) => {
+    const token = localStorage.getItem('token');
+    try {
+      const courseRes = await fetch(`${API_BASE_URL}/courses/${courseId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const courseData = await courseRes.json();
+      if (courseData.success) setCourseDetail(courseData.data);
+      else throw new Error('Course not found');
+
+      const lessonsRes = await fetch(`${API_BASE_URL}/lessons/courses/${courseId}/lessons`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const lessonsData = await lessonsRes.json();
+      if (lessonsData.success) setLessons(lessonsData.data);
+
+      const resourcesRes = await fetch(`${API_BASE_URL}/resources/courses/${courseId}/resources`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const resourcesData = await resourcesRes.json();
+      if (resourcesData.success) setResources(resourcesData.data);
+
+      const studentsRes = await fetch(`${API_BASE_URL}/enrollments/courses/${courseId}/students`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const studentsData = await studentsRes.json();
+      if (studentsData.success) setStudents(studentsData.data);
+    } catch (error) {
+      console.error('Error fetching course detail:', error);
+    }
   };
 
+  const fetchConversation = async (courseId, tutorId) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/messages?course=${courseId}&user=${tutorId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        return {
+          otherUser: { _id: tutorId, name: 'Student' }, // placeholder
+          course: { _id: courseId, title: courseDetail?.title || '' },
+          messages: data.data
+        };
+      } else {
+        return {
+          otherUser: { _id: tutorId, name: 'Student' },
+          course: { _id: courseId, title: courseDetail?.title || '' },
+          messages: []
+        };
+      }
+    } catch (error) {
+      console.error('Error fetching conversation:', error);
+      return null;
+    }
+  };
+
+  const fetchMessages = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoadingMessages(true);
+    const token = localStorage.getItem('token');
+    const currentUser = JSON.parse(localStorage.getItem('user'));
+    try {
+      const [inboxRes, sentRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/messages/inbox`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/messages/sent`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      const inboxData = await inboxRes.json();
+      const sentData = await sentRes.json();
+      
+      let allMessages = [];
+      if (inboxData.success) allMessages.push(...inboxData.data);
+      if (sentData.success) allMessages.push(...sentData.data);
+      
+      const grouped = {};
+      allMessages.forEach(msg => {
+        const otherUser = msg.sender._id === currentUser.id ? msg.receiver : msg.sender;
+        const courseId = msg.course?._id || msg.course || 'general';
+        const key = `${otherUser._id}-${courseId}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            id: key,
+            otherUser,
+            course: msg.course,
+            messages: [],
+            unreadCount: 0
+          };
+        }
+        grouped[key].messages.push(msg);
+        if (!msg.read && msg.receiver._id === currentUser.id) grouped[key].unreadCount++;
+      });
+      
+      const convList = Object.values(grouped).map(conv => ({
+        ...conv,
+        messages: conv.messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
+        lastMessage: conv.messages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[conv.messages.length - 1]
+      })).sort((a, b) => new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt));
+      
+      setConversations(convList);
+      if (selectedIdRef.current) {
+        const updated = convList.find(c => c.id === selectedIdRef.current);
+        if (updated) setSelectedConversation(updated);
+      }
+    } catch (error) {
+      console.error("Fetch error:", error);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, []);
+
+  const fetchScheduleData = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const coursesRes = await fetch(`${API_BASE_URL}/courses/tutor/courses`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const coursesData = await coursesRes.json();
+      if (coursesData.success) {
+        setCoursesForFilter(coursesData.data);
+        let allLessons = [];
+        for (const course of coursesData.data) {
+          const lessonsRes = await fetch(`${API_BASE_URL}/lessons/courses/${course._id}/lessons`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const lessonsData = await lessonsRes.json();
+          if (lessonsData.success) {
+            const lessonsWithCourse = lessonsData.data.map(lesson => ({
+              ...lesson,
+              courseTitle: course.title,
+              courseId: course._id,
+              courseSubject: course.subject,
+              enrolledCount: course.enrolledCount || 0
+            }));
+            allLessons = [...allLessons, ...lessonsWithCourse];
+          }
+        }
+        allLessons.sort((a, b) => new Date(a.date) - new Date(b.date));
+        setLessonsForSchedule(allLessons);
+        filterLessonsByDate(allLessons);
+      }
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+      setMockScheduleData();
+    }
+  };
+
+  const filterLessonsByDate = (lessonsData = lessonsForSchedule) => {
+    let filtered = lessonsData.filter(lesson => 
+      isSameDay(parseISO(lesson.date), selectedDate)
+    );
+    if (filterCourse !== 'all') {
+      filtered = filtered.filter(lesson => lesson.courseId === filterCourse);
+    }
+    setFilteredLessons(filtered);
+  };
+
+  const setMockScheduleData = () => {
+    const mockLessons = [
+      {
+        _id: '1',
+        title: 'Advanced JavaScript: Closures & Scope',
+        description: 'Deep dive into JavaScript closures and scope chains',
+        date: new Date().toISOString(),
+        duration: 60,
+        meetingLink: 'https://meet.google.com/xxx-xxxx-xxx',
+        courseTitle: 'Advanced JavaScript',
+        courseId: '1',
+        courseSubject: 'Programming',
+        enrolledCount: 24
+      },
+      {
+        _id: '2',
+        title: 'React Hooks Workshop',
+        description: 'Learn useEffect, useState, and custom hooks',
+        date: new Date(Date.now() + 86400000).toISOString(),
+        duration: 90,
+        meetingLink: 'https://zoom.us/j/123456789',
+        courseTitle: 'React Masterclass',
+        courseId: '2',
+        courseSubject: 'Web Development',
+        enrolledCount: 18
+      }
+    ];
+    setLessonsForSchedule(mockLessons);
+    filterLessonsByDate(mockLessons);
+    setCoursesForFilter([
+      { _id: '1', title: 'Advanced JavaScript', subject: 'Programming' },
+      { _id: '2', title: 'React Masterclass', subject: 'Web Development' }
+    ]);
+  };
+
+  // ========== Navigation handlers ==========
+  const goToDashboard = () => {
+    setActiveView('dashboard');
+    setSelectedCourseId(null);
+  };
+  const goToMyCourses = () => {
+    setActiveView('courses');
+    setSelectedCourseId(null);
+  };
+  const goToCreateCourse = () => {
+    setActiveView('create-course');
+  };
+  const goToSchedule = () => {
+    setActiveView('schedule');
+    fetchScheduleData();
+  };
+  const goToMessages = () => {
+    setActiveView('messages');
+    fetchMessages();
+  };
+  const goToCourseDetail = (courseId) => {
+    setSelectedCourseId(courseId);
+    setActiveView('courseDetail');
+    fetchCourseDetail(courseId);
+  };
+  const goToLessonCreate = (courseId) => {
+    setSelectedCourseId(courseId);
+    setActiveView('lessonCreate');
+    // fetch course title
+    const token = localStorage.getItem('token');
+    fetch(`${API_BASE_URL}/courses/${courseId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setCourseTitle(data.data.title);
+      });
+  };
+  const goToResourceUpload = (courseId) => {
+    setSelectedCourseId(courseId);
+    setActiveView('resourceUpload');
+    const token = localStorage.getItem('token');
+    fetch(`${API_BASE_URL}/courses/${courseId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setCourseTitle(data.data.title);
+      });
+  };
+  
+  // ========== Helper functions ==========
   const getInitials = (name) => {
     if (!name) return 'T';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
-
   const getTimeOfDay = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Morning';
     if (hour < 18) return 'Afternoon';
     return 'Evening';
   };
+  const formatTime = (dateStr) => {
+    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
+  
+  // ========== Render functions for each view ==========
+  
+  // Dashboard view (the main landing page)
+  const renderDashboard = () => {
+    const statCards = [
+      { title: 'Total Students', value: stats.totalStudents, change: '+8 this month', icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+      { title: 'Courses', value: stats.totalCourses, change: '+2 new', icon: FolderOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+      { title: 'Resources', value: stats.totalResources, change: '+5 new', icon: FileText, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+      { title: 'Rating', value: stats.rating.toFixed(1), change: `⭐ ${stats.rating}/5`, icon: Star, color: 'text-amber-600', bg: 'bg-amber-50' },
+    ];
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto space-y-8">
+        {/* Welcome Header */}
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl shadow-indigo-500/20">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest backdrop-blur-sm">Tutor Premium</span>
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Live</span>
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight">Good {getTimeOfDay()}, {tutor?.name?.split(' ')[0] || 'Tutor'}! 👋</h2>
+              <p className="text-indigo-100 mt-2 max-w-md font-medium opacity-90">
+                You have {upcomingLessons.length} lessons today. Your overall rating is {stats.rating.toFixed(1)}/5.0. Keep inspiring!
+              </p>
+            </div>
+            <button 
+              onClick={goToCreateCourse}
+              className="flex items-center space-x-2 px-6 py-3 bg-white text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all shadow-lg shadow-indigo-500/20 group"
+            >
+              <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform" />
+              <span>Create New Course</span>
+            </button>
+          </div>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+          <div className="absolute bottom-0 right-10 opacity-10 pointer-events-none"><BookOpen className="w-64 h-64" /></div>
+        </div>
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Pending screen
-  // ─────────────────────────────────────────────────────────────────────────
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {statCards.map((stat, i) => {
+            const Icon = stat.icon;
+            return (
+              <div key={i} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`${stat.bg} ${stat.color} p-3 rounded-2xl`}><Icon className="h-6 w-6" /></div>
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">{stat.change}</span>
+                </div>
+                <p className="text-sm font-medium text-slate-500">{stat.title}</p>
+                <h3 className="text-2xl font-bold text-slate-900 mt-1">{stat.value}</h3>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Today's Lessons */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900">Today's Lessons</h3>
+            <button onClick={goToSchedule} className="text-indigo-600 text-sm font-bold">View Full Schedule</button>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {upcomingLessons.length > 0 ? upcomingLessons.map(lesson => (
+              <div key={lesson.id} className="p-6 flex items-center justify-between hover:bg-slate-50">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600"><Video className="h-6 w-6" /></div>
+                  <div>
+                    <h4 className="font-bold text-slate-900">{lesson.title}</h4>
+                    <p className="text-sm text-slate-500">Course: {lesson.course} • {lesson.students} enrolled</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-slate-900">{lesson.time}</p>
+                  {lesson.meetingLink && (
+                    <a href={lesson.meetingLink} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700">Join</a>
+                  )}
+                </div>
+              </div>
+            )) : <div className="p-12 text-center"><p className="text-slate-500">No lessons scheduled for today</p></div>}
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 mb-6">Quick Actions</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: 'Create Course', icon: Plus, color: 'text-blue-600', bg: 'bg-blue-50', action: goToCreateCourse },
+              { label: 'Schedule', icon: CalendarIcon, color: 'text-indigo-600', bg: 'bg-indigo-50', action: goToSchedule },
+              { label: 'Messages', icon: MessageSquare, color: 'text-amber-600', bg: 'bg-amber-50', action: goToMessages },
+              { label: 'Settings', icon: Settings, color: 'text-slate-600', bg: 'bg-slate-50', action: () => console.log('Settings') },
+            ].map((action, i) => {
+              const Icon = action.icon;
+              return (
+                <button key={i} onClick={action.action} className="group p-6 bg-white border border-slate-100 rounded-3xl hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5 transition-all text-center">
+                  <div className={`${action.bg} ${action.color} w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">{action.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  // My Courses view (formerly TutorCourses)
+  const renderMyCourses = () => {
+    if (loading) {
+      return (
+        <div className="flex justify-center py-12">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={goToDashboard}
+              className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-xl transition-all text-slate-500"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">My Courses</h1>
+              <p className="text-slate-500 mt-1">Manage the courses you've created.</p>
+            </div>
+          </div>
+          <button
+            onClick={goToCreateCourse}
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Create New Course</span>
+          </button>
+        </div>
+
+        {courses.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-12 text-center">
+            <FolderOpen className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-slate-900 mb-2">No courses yet</h3>
+            <p className="text-slate-500 mb-6">Create your first course to start teaching.</p>
+            <button
+              onClick={goToCreateCourse}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20"
+            >
+              <Plus className="h-5 w-5" />
+              Create New Course
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {courses.map(course => (
+              <div key={course._id} className="bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden group">
+                <CourseCardHeader course={course} height="h-40">
+                  <span className="absolute top-3 right-3 px-2 py-1 bg-white/90 text-[10px] font-bold rounded-full">
+                    {course.status === 'published' ? 'Published' : 'Draft'}
+                  </span>
+                </CourseCardHeader>
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+                      {course.subject}
+                    </span>
+                    <button className="p-1 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors">
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition-colors">
+                    {course.title}
+                  </h3>
+                  <div className="flex items-center gap-4 text-sm text-slate-500 mb-4">
+                    <div className="flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+                      {course.enrolledCount || 0} students
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <BookOpen className="h-4 w-4" />
+                      {course.lessonCount || 0} lessons
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => goToCourseDetail(course._id)}
+                    className="inline-flex items-center text-sm font-bold text-indigo-600 hover:underline"
+                  >
+                    View Course <ExternalLink className="h-4 w-4 ml-1" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    );
+  };
+
+  // Create Course view (formerly TutorCourseCreate)
+  const renderCreateCourse = () => {
+    const subjects = [
+      'Mathematics', 'Physics', 'Chemistry', 'Biology',
+      'Computer Science', 'Programming', 'Web Development',
+      'Database Systems', 'Networking', 'English Literature',
+      'Economics', 'Business Studies', 'Accounting'
+    ];
+    const validateCreate = () => {
+      const newErrors = {};
+      if (!createFormData.title.trim()) newErrors.title = 'Title is required';
+      if (!createFormData.subject) newErrors.subject = 'Subject is required';
+      if (!createFormData.description.trim()) newErrors.description = 'Description is required';
+      setCreateErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    };
+    const handleCreateSubmit = async (e) => {
+      e.preventDefault();
+      if (!validateCreate()) return;
+      setCreateSubmitting(true);
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch(`${API_BASE_URL}/courses`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(createFormData)
+        });
+        const data = await res.json();
+        if (data.success) {
+          setCreateSuccess(true);
+          setTimeout(() => goToMyCourses(), 2000);
+        } else {
+          alert(data.message || 'Failed to create course');
+        }
+      } catch (error) {
+        console.error('Error creating course:', error);
+        alert('Network error. Please try again.');
+      } finally {
+        setCreateSubmitting(false);
+      }
+    };
+    if (createSuccess) {
+      return (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-12 text-center max-w-md mx-auto shadow-2xl">
+          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle className="h-10 w-10 text-emerald-600" /></div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Course Created!</h2>
+          <p className="text-slate-500">Your course has been published and is now visible to students.</p>
+        </motion.div>
+      );
+    }
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={goToMyCourses} className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-xl transition-all text-slate-500">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Create New Course</h1>
+            <p className="text-slate-500 mt-1">Set up a new course – you can add lessons later.</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleCreateSubmit} className="space-y-6">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-5">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Course Title *</label>
+              <input
+                type="text"
+                value={createFormData.title}
+                onChange={e => setCreateFormData({...createFormData, title: e.target.value})}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all ${createErrors.title ? 'border-rose-300' : 'border-transparent focus:border-brand-500'}`}
+                placeholder="e.g. Advanced JavaScript"
+              />
+              {createErrors.title && <p className="text-xs text-rose-500 mt-1">{createErrors.title}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Subject *</label>
+              <select
+                value={createFormData.subject}
+                onChange={e => setCreateFormData({...createFormData, subject: e.target.value})}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all ${createErrors.subject ? 'border-rose-300' : 'border-transparent focus:border-brand-500'}`}
+              >
+                <option value="">Select a subject</option>
+                {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {createErrors.subject && <p className="text-xs text-rose-500 mt-1">{createErrors.subject}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Description *</label>
+              <textarea
+                rows={4}
+                value={createFormData.description}
+                onChange={e => setCreateFormData({...createFormData, description: e.target.value})}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all ${createErrors.description ? 'border-rose-300' : 'border-transparent focus:border-brand-500'}`}
+                placeholder="What will students learn? What are the prerequisites?"
+              />
+              {createErrors.description && <p className="text-xs text-rose-500 mt-1">{createErrors.description}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Price (LKR)</label>
+              <input
+                type="number"
+                value={createFormData.price}
+                onChange={e => setCreateFormData({...createFormData, price: e.target.value})}
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                placeholder="0 for free"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">Set to 0 for free courses.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Thumbnail URL (optional)</label>
+              <input
+                type="url"
+                value={createFormData.thumbnail}
+                onChange={e => setCreateFormData({...createFormData, thumbnail: e.target.value})}
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                placeholder="https://example.com/image.jpg"
+              />
+            </div>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <button type="button" onClick={goToMyCourses} className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50">Cancel</button>
+            <button type="submit" disabled={createSubmitting} className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 disabled:opacity-70 flex items-center justify-center gap-2">
+              {createSubmitting ? <div className="w-5 h-5 border-2 border-slate-700 border-t-transparent rounded-full animate-spin"></div> : <Save className="h-5 w-5" />}
+              {createSubmitting ? 'Creating...' : 'Create Course'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    );
+  };
+
+  // Schedule view (formerly TutorSchedule)
+  const renderSchedule = () => {
+    const tileContent = ({ date, view }) => {
+      if (view === 'month') {
+        const hasLesson = lessonsForSchedule.some(lesson => isSameDay(parseISO(lesson.date), date));
+        if (hasLesson) {
+          return <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full mx-auto mt-1"></div>;
+        }
+      }
+      return null;
+    };
+    const getStatusBadge = (date) => {
+      const lessonDate = new Date(date);
+      const now = new Date();
+      if (lessonDate < now) {
+        return <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-full">Past</span>;
+      }
+      return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full">Upcoming</span>;
+    };
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={goToDashboard} className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-xl transition-all text-slate-500">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">My Teaching Schedule</h1>
+              <p className="text-slate-500 mt-1">View all your upcoming lessons and classes</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setScheduleView('calendar')}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${scheduleView === 'calendar' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            >
+              Calendar
+            </button>
+            <button
+              onClick={() => setScheduleView('list')}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${scheduleView === 'list' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+            >
+              List View
+            </button>
+            <button
+              onClick={() => goToLessonCreate(selectedCourseId)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20"
+            >
+              <Plus className="h-4 w-4" />
+              New Lesson
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Lessons</p>
+            <p className="text-2xl font-bold text-slate-900">{lessonsForSchedule.length}</p>
+          </div>
+          <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">This Week</p>
+            <p className="text-2xl font-bold text-indigo-600">
+              {lessonsForSchedule.filter(l => {
+                const lessonDate = new Date(l.date);
+                const weekStart = startOfWeek(new Date());
+                const weekEnd = endOfWeek(new Date());
+                return lessonDate >= weekStart && lessonDate <= weekEnd;
+              }).length}
+            </p>
+          </div>
+          <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Upcoming</p>
+            <p className="text-2xl font-bold text-emerald-600">
+              {lessonsForSchedule.filter(l => new Date(l.date) > new Date()).length}
+            </p>
+          </div>
+          <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Students</p>
+            <p className="text-2xl font-bold text-blue-600">
+              {lessonsForSchedule.reduce((sum, l) => sum + (l.enrolledCount || 0), 0)}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+          <div className="flex flex-col md:flex-row gap-4 items-center">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-slate-400" />
+              <span className="text-sm font-medium text-slate-600">Filter by course:</span>
+            </div>
+            <select
+              value={filterCourse}
+              onChange={(e) => setFilterCourse(e.target.value)}
+              className="px-4 py-2 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl focus:outline-none transition-all text-sm font-medium text-slate-700"
+            >
+              <option value="all">All Courses</option>
+              {coursesForFilter.map(course => (
+                <option key={course._id} value={course._id}>{course.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {scheduleView === 'calendar' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 overflow-hidden">
+              <div className="calendar-container custom-calendar">
+                <Calendar
+                  onChange={setSelectedDate}
+                  value={selectedDate}
+                  tileContent={tileContent}
+                  className="w-full border-none font-sans"
+                  next2Label={null}
+                  prev2Label={null}
+                />
+              </div>
+              <style>{`
+                .custom-calendar .react-calendar {
+                  width: 100%;
+                  border: none;
+                  font-family: inherit;
+                }
+                .custom-calendar .react-calendar__navigation {
+                  margin-bottom: 2rem;
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                }
+                .custom-calendar .react-calendar__navigation button {
+                  min-width: 44px;
+                  background: none;
+                  font-size: 1.125rem;
+                  font-weight: 700;
+                  color: #0f172a;
+                  border-radius: 12px;
+                  padding: 8px;
+                  transition: all 0.2s;
+                }
+                .custom-calendar .react-calendar__navigation button:hover {
+                  background-color: #f8fafc;
+                }
+                .custom-calendar .react-calendar__month-view__weekdays {
+                  text-transform: uppercase;
+                  font-weight: 700;
+                  font-size: 0.75rem;
+                  color: #94a3b8;
+                  letter-spacing: 0.05em;
+                  margin-bottom: 1rem;
+                }
+                .custom-calendar .react-calendar__month-view__days__day {
+                  padding: 1rem 0;
+                  font-weight: 600;
+                  color: #475569;
+                  border-radius: 16px;
+                  transition: all 0.2s;
+                }
+                .custom-calendar .react-calendar__month-view__days__day:hover {
+                  background-color: #f1f5f9;
+                }
+                .custom-calendar .react-calendar__tile--now {
+                  background: #eff6ff;
+                  color: #2563eb;
+                }
+                .custom-calendar .react-calendar__tile--active {
+                  background: #2563eb !important;
+                  color: white !important;
+                  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+                }
+              `}</style>
+            </div>
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-slate-100 bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5 text-indigo-600" />
+                  <h3 className="font-bold text-slate-900">
+                    {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+                  </h3>
+                </div>
+              </div>
+              <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto">
+                {filteredLessons.length > 0 ? (
+                  filteredLessons.map(lesson => (
+                    <div key={lesson._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:shadow-md transition-all">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="p-2 bg-white rounded-xl text-indigo-600 shadow-sm">
+                          <Video className="h-4 w-4" />
+                        </div>
+                        {getStatusBadge(lesson.date)}
+                      </div>
+                      <h4 className="font-bold text-slate-900 mb-1">{lesson.title}</h4>
+                      <p className="text-xs text-slate-500 mb-2">{lesson.courseTitle}</p>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
+                        <Clock className="h-3 w-3" />
+                        <span>{formatTime(lesson.date)}</span>
+                        <span>•</span>
+                        <span>{lesson.duration} min</span>
+                        <span>•</span>
+                        <Users className="h-3 w-3" />
+                        <span>{lesson.enrolledCount || 0} students</span>
+                      </div>
+                      {lesson.meetingLink && (
+                        <div className="flex gap-2">
+                          <a
+                            href={lesson.meetingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline"
+                          >
+                            Start Session <ExternalLink className="h-3 w-3" />
+                          </a>
+                          <button
+                            onClick={() => goToCourseDetail(lesson.courseId)}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-indigo-600"
+                          >
+                            View Course
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <CalendarIcon className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500">No lessons scheduled for this day</p>
+                    <button
+                      onClick={() => goToLessonCreate(selectedCourseId)}
+                      className="inline-block mt-4 text-indigo-600 text-sm font-bold hover:underline"
+                    >
+                      Schedule a lesson
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-slate-50">
+              <h2 className="text-lg font-bold text-slate-900">All Upcoming Lessons</h2>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {lessonsForSchedule.filter(l => new Date(l.date) >= new Date()).length === 0 ? (
+                <div className="p-12 text-center">
+                  <CalendarIcon className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+                  <p className="text-slate-500">No upcoming lessons scheduled</p>
+                  <button
+                    onClick={() => goToLessonCreate(selectedCourseId)}
+                    className="inline-block mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
+                  >
+                    Create New Lesson
+                  </button>
+                </div>
+              ) : (
+                lessonsForSchedule
+                  .filter(l => new Date(l.date) >= new Date())
+                  .sort((a, b) => new Date(a.date) - new Date(b.date))
+                  .map(lesson => (
+                    <div key={lesson._id} className="p-6 hover:bg-slate-50 transition-all">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                            <Video className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-slate-900 text-lg">{lesson.title}</h3>
+                            <p className="text-sm text-slate-500">{lesson.courseTitle} • {lesson.courseSubject}</p>
+                            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-slate-500">
+                              <span className="flex items-center gap-1">
+                                <CalendarIcon className="h-3 w-3" />
+                                {new Date(lesson.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatTime(lesson.date)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {lesson.duration} min
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {lesson.enrolledCount || 0} enrolled
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          {lesson.meetingLink && (
+                            <a
+                              href={lesson.meetingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20"
+                            >
+                              Start Session
+                            </a>
+                          )}
+                          <button
+                            onClick={() => goToCourseDetail(lesson.courseId)}
+                            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all"
+                          >
+                            View Course
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+        )}
+      </motion.div>
+    );
+  };
+
+  // Messages view (formerly TutorMessages)
+  const renderMessages = () => {
+    const formatDate = (dateStr) => {
+      const date = new Date(dateStr);
+      const diff = (new Date() - date) / 1000;
+      if (diff < 60) return 'Just now';
+      if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+      if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+      return date.toLocaleDateString();
+    };
+    const handleSelect = (conv) => {
+      selectedIdRef.current = conv.id;
+      setSelectedConversation(conv);
+    };
+    const onMessageSent = () => {
+      fetchMessages(true);
+    };
+    if (loadingMessages && conversations.length === 0) {
+      return (
+        <div className="flex justify-center p-10">
+          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto space-y-6 p-4">
+        <div className="flex items-center gap-4">
+          <button onClick={goToDashboard} className="p-2 hover:bg-white border rounded-xl transition-all text-slate-500">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-2xl font-bold text-slate-900">Tutor Messages</h1>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden h-[600px] flex flex-col">
+            <div className="p-4 border-b bg-slate-50 font-bold text-slate-700">Conversations</div>
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+              {conversations.length === 0 ? (
+                <div className="p-10 text-center text-slate-400">No messages found.</div>
+              ) : (
+                conversations.map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => handleSelect(conv)}
+                    className={`w-full p-4 text-left hover:bg-slate-50 transition-all ${selectedConversation?.id === conv.id ? 'bg-indigo-50 border-r-4 border-indigo-600' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0"><User className="text-slate-500" size={20}/></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center">
+                          <p className="font-bold text-slate-900 truncate">{conv.otherUser.name}</p>
+                          <span className="text-[10px] text-slate-400">{formatDate(conv.lastMessage.createdAt)}</span>
+                        </div>
+                        <p className="text-xs text-indigo-600 truncate flex items-center gap-1"><BookOpen size={12}/> {conv.course?.title}</p>
+                        <p className="text-sm text-slate-500 truncate mt-1">{conv.lastMessage.content}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden h-[600px]">
+            {selectedConversation ? (
+              <MessageThread
+                conversation={selectedConversation}
+                onMessageSent={onMessageSent}
+              />
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-slate-300">
+                <MessageSquare size={64} className="opacity-20 mb-4" />
+                <p className="text-slate-500 font-medium">Select a student to chat</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  // Course Detail view (formerly TutorCourseDetail)
+  const renderCourseDetail = () => {
+    if (!courseDetail) {
+      return <div className="flex justify-center py-12"><div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>;
+    }
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={goToMyCourses} className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-xl transition-all text-slate-500">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{courseDetail.title}</h1>
+              <p className="text-slate-500 mt-1">{courseDetail.subject} • {courseDetail.enrolledCount || 0} students enrolled</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => goToLessonCreate(courseDetail._id)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Lesson</span>
+            </button>
+            <button
+              onClick={() => goToResourceUpload(courseDetail._id)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Upload Resource</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+            <p className="text-slate-600">{courseDetail.description}</p>
+          </div>
+          <div className="border-b border-slate-100">
+            <div className="flex gap-2 p-2">
+              {['lessons', 'resources', 'students'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setCourseDetailActiveTab(tab)}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${courseDetailActiveTab === tab ? 'bg-indigo-50 text-indigo-600 border-b-2 border-indigo-500' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                  {tab === 'lessons' && <><Video className="h-4 w-4 inline mr-2" />Lessons ({lessons.length})</>}
+                  {tab === 'resources' && <><FileText className="h-4 w-4 inline mr-2" />Resources ({resources.length})</>}
+                  {tab === 'students' && <><Users className="h-4 w-4 inline mr-2" />Students ({students.length})</>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-6">
+            {courseDetailActiveTab === 'lessons' && (
+              <div className="space-y-4">
+                {lessons.length > 0 ? (
+                  lessons.map(lesson => (
+                    <div key={lesson._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:shadow-md transition-all">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-bold text-slate-900">{lesson.title}</h3>
+                          <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
+                            <span className="flex items-center gap-1"><CalendarIcon className="h-3 w-3" /> {new Date(lesson.date).toLocaleDateString()}</span>
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatTime(lesson.date)}</span>
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {lesson.duration} min</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <a href={lesson.meetingLink} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all">
+                            Start Session
+                          </a>
+                          <button className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg">
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                      {lesson.meetingLink && (
+                        <a href={lesson.meetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline mt-2">
+                          <ExternalLink className="h-3 w-3" /> Meeting Link
+                        </a>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-slate-500">No lessons yet. Click "Add Lesson" to create one.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {courseDetailActiveTab === 'resources' && (
+              <div className="space-y-4">
+                {resources.length > 0 ? (
+                  resources.map(res => (
+                    <div key={res._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold text-slate-900">{res.title}</h4>
+                        <p className="text-xs text-slate-500">{res.fileType?.toUpperCase() || 'FILE'} • {res.downloads} downloads</p>
+                      </div>
+                      <a href={`${API_BASE_URL}${res.fileUrl}`} download className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors">
+                        <Download className="h-5 w-5" />
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-slate-500">No resources yet. You can upload materials later.</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {courseDetailActiveTab === 'students' && (
+              <div className="space-y-4">
+                {students.length > 0 ? (
+                  students.map(enrollment => (
+                    <div key={enrollment._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold text-slate-900">{enrollment.student?.name || 'Unknown'}</h4>
+                        <p className="text-xs text-slate-500">{enrollment.student?.email || ''}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          // For simplicity, we'll just go to messages and maybe pre-select this student's conversation.
+                          // But that would require more complex state. We'll just go to messages.
+                          goToMessages();
+                        }}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        <MessageSquare className="h-3 w-3 inline mr-1" /> Message
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-slate-500">No students enrolled yet.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  // Lesson Create view (formerly TutorLessonCreate)
+  const renderLessonCreate = () => {
+    const validateLesson = () => {
+      const newErrors = {};
+      if (!lessonFormData.title.trim()) newErrors.title = 'Lesson title is required';
+      if (!lessonFormData.description.trim()) newErrors.description = 'Description is required';
+      if (!lessonFormData.date) newErrors.date = 'Date is required';
+      if (!lessonFormData.time) newErrors.time = 'Start time is required';
+      if (!lessonFormData.meetingLink) newErrors.meetingLink = 'Meeting link is required';
+      if (lessonFormData.meetingLink && !lessonFormData.meetingLink.startsWith('http')) {
+        newErrors.meetingLink = 'Meeting link must start with http:// or https://';
+      }
+      setLessonErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    };
+    const handleLessonSubmit = async (e) => {
+      e.preventDefault();
+      if (!validateLesson()) return;
+      setLessonSubmitting(true);
+      const token = localStorage.getItem('token');
+      const dateTime = new Date(`${lessonFormData.date}T${lessonFormData.time}`);
+      if (isNaN(dateTime.getTime())) {
+        setLessonErrors({ ...lessonErrors, date: 'Invalid date/time' });
+        setLessonSubmitting(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/lessons/courses/${selectedCourseId}/lessons`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: lessonFormData.title,
+            description: lessonFormData.description,
+            date: dateTime.toISOString(),
+            duration: parseInt(lessonFormData.duration),
+            meetingLink: lessonFormData.meetingLink,
+            meetingPassword: lessonFormData.meetingPassword
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setLessonSuccess(true);
+          setTimeout(() => goToCourseDetail(selectedCourseId), 2000);
+        } else {
+          alert(data.message || 'Failed to create lesson');
+        }
+      } catch (error) {
+        console.error('Error creating lesson:', error);
+        alert('Network error. Please try again.');
+      } finally {
+        setLessonSubmitting(false);
+      }
+    };
+    if (lessonSuccess) {
+      return (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-12 text-center max-w-md mx-auto shadow-2xl">
+          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle className="h-10 w-10 text-emerald-600" /></div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Lesson Created!</h2>
+          <p className="text-slate-500">Your lesson has been added to the course.</p>
+          <button onClick={() => goToCourseDetail(selectedCourseId)} className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all">
+            Back to Course
+          </button>
+        </motion.div>
+      );
+    }
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={() => goToCourseDetail(selectedCourseId)} className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-xl transition-all text-slate-500">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Add Lesson</h1>
+            <p className="text-slate-500 mt-1">to {courseTitle || 'course'}</p>
+          </div>
+        </div>
+        <form onSubmit={handleLessonSubmit} className="space-y-6">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-5">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Lesson Title *</label>
+              <input
+                type="text"
+                value={lessonFormData.title}
+                onChange={e => setLessonFormData({...lessonFormData, title: e.target.value})}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all ${lessonErrors.title ? 'border-rose-300' : 'border-transparent focus:border-brand-500'}`}
+                placeholder="e.g. Introduction to JavaScript"
+              />
+              {lessonErrors.title && <p className="text-xs text-rose-500 mt-1">{lessonErrors.title}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Description *</label>
+              <textarea
+                rows={3}
+                value={lessonFormData.description}
+                onChange={e => setLessonFormData({...lessonFormData, description: e.target.value})}
+                className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all ${lessonErrors.description ? 'border-rose-300' : 'border-transparent focus:border-brand-500'}`}
+                placeholder="What will students learn?"
+              />
+              {lessonErrors.description && <p className="text-xs text-rose-500 mt-1">{lessonErrors.description}</p>}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Date *</label>
+                <input
+                  type="date"
+                  value={lessonFormData.date}
+                  onChange={e => setLessonFormData({...lessonFormData, date: e.target.value})}
+                  min={new Date().toISOString().split('T')[0]}
+                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all ${lessonErrors.date ? 'border-rose-300' : 'border-transparent focus:border-brand-500'}`}
+                />
+                {lessonErrors.date && <p className="text-xs text-rose-500 mt-1">{lessonErrors.date}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Start Time *</label>
+                <input
+                  type="time"
+                  value={lessonFormData.time}
+                  onChange={e => setLessonFormData({...lessonFormData, time: e.target.value})}
+                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all ${lessonErrors.time ? 'border-rose-300' : 'border-transparent focus:border-brand-500'}`}
+                />
+                {lessonErrors.time && <p className="text-xs text-rose-500 mt-1">{lessonErrors.time}</p>}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Duration (minutes)</label>
+                <select
+                  value={lessonFormData.duration}
+                  onChange={e => setLessonFormData({...lessonFormData, duration: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                >
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60">60 minutes</option>
+                  <option value="90">90 minutes</option>
+                  <option value="120">120 minutes</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Meeting Link *</label>
+                <input
+                  type="url"
+                  value={lessonFormData.meetingLink}
+                  onChange={e => setLessonFormData({...lessonFormData, meetingLink: e.target.value})}
+                  placeholder="https://zoom.us/j/... or https://meet.google.com/..."
+                  className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all ${lessonErrors.meetingLink ? 'border-rose-300' : 'border-transparent focus:border-brand-500'}`}
+                />
+                {lessonErrors.meetingLink && <p className="text-xs text-rose-500 mt-1">{lessonErrors.meetingLink}</p>}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Meeting Password (Optional)</label>
+              <input
+                type="text"
+                value={lessonFormData.meetingPassword}
+                onChange={e => setLessonFormData({...lessonFormData, meetingPassword: e.target.value})}
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                placeholder="Enter password if required"
+              />
+            </div>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <button type="button" onClick={() => goToCourseDetail(selectedCourseId)} className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50">Cancel</button>
+            <button type="submit" disabled={lessonSubmitting} className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 disabled:opacity-70 flex items-center justify-center gap-2">
+              {lessonSubmitting ? <div className="w-5 h-5 border-2 border-slate-700 border-t-transparent rounded-full animate-spin"></div> : <Save className="h-5 w-5" />}
+              {lessonSubmitting ? 'Creating...' : 'Create Lesson'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    );
+  };
+
+  // Resource Upload view (formerly TutorResourceUpload)
+  const renderResourceUpload = () => {
+    const handleFileChange = (e) => {
+      const selected = e.target.files[0];
+      if (selected) {
+        setResourceFile(selected);
+        const ext = selected.name.split('.').pop().toLowerCase();
+        if (['pdf'].includes(ext)) setResourceFileType('pdf');
+        else if (['mp4', 'mov', 'avi'].includes(ext)) setResourceFileType('video');
+        else if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) setResourceFileType('image');
+        else setResourceFileType('other');
+      }
+    };
+    const handleResourceSubmit = async (e) => {
+      e.preventDefault();
+      if (!resourceTitle.trim()) {
+        alert('Please enter a title');
+        return;
+      }
+      if (!resourceFile) {
+        alert('Please select a file');
+        return;
+      }
+      setResourceSubmitting(true);
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', resourceFile);
+      formData.append('title', resourceTitle);
+      formData.append('description', resourceDescription);
+      formData.append('fileType', resourceFileType);
+      try {
+        const res = await fetch(`${API_BASE_URL}/resources/courses/${selectedCourseId}/resources`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+          setResourceSuccess(true);
+          setTimeout(() => goToCourseDetail(selectedCourseId), 2000);
+        } else {
+          alert(data.message || 'Failed to upload resource');
+        }
+      } catch (error) {
+        console.error('Error uploading resource:', error);
+        alert('Network error. Please try again.');
+      } finally {
+        setResourceSubmitting(false);
+      }
+    };
+    if (resourceSuccess) {
+      return (
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl p-12 text-center max-w-md mx-auto shadow-2xl">
+          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle className="h-10 w-10 text-emerald-600" /></div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Resource Uploaded!</h2>
+          <p className="text-slate-500">The file has been added to the course.</p>
+        </motion.div>
+      );
+    }
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={() => goToCourseDetail(selectedCourseId)} className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-xl transition-all text-slate-500">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Upload Resource</h1>
+            <p className="text-slate-500 mt-1">for {courseTitle || 'course'}</p>
+          </div>
+        </div>
+        <form onSubmit={handleResourceSubmit} className="space-y-6">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden p-6 space-y-5">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Title *</label>
+              <input
+                type="text"
+                value={resourceTitle}
+                onChange={e => setResourceTitle(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                placeholder="e.g. Lecture Slides"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">Description (optional)</label>
+              <textarea
+                rows={3}
+                value={resourceDescription}
+                onChange={e => setResourceDescription(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all resize-none"
+                placeholder="Brief description of the resource"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">File *</label>
+              <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-brand-500 transition-colors cursor-pointer" onClick={() => document.getElementById('fileInput').click()}>
+                {resourceFile ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <FileText className="h-8 w-8 text-brand-500" />
+                    <span className="text-slate-700 font-medium">{resourceFile.name}</span>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setResourceFile(null); }} className="p-1 text-slate-400 hover:text-rose-500">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-10 w-10 text-slate-400 mx-auto mb-2" />
+                    <p className="text-slate-500">Click to select a file (PDF, video, image, etc.)</p>
+                    <p className="text-xs text-slate-400 mt-1">Max 10 MB</p>
+                  </>
+                )}
+                <input id="fileInput" type="file" className="hidden" onChange={handleFileChange} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-2">File Type</label>
+              <select
+                value={resourceFileType}
+                onChange={e => setResourceFileType(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+              >
+                <option value="pdf">PDF</option>
+                <option value="video">Video</option>
+                <option value="image">Image</option>
+                <option value="link">Link (will be stored as a URL)</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <button type="button" onClick={() => goToCourseDetail(selectedCourseId)} className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50">Cancel</button>
+            <button type="submit" disabled={resourceSubmitting} className="flex-1 py-4 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 disabled:opacity-70 flex items-center justify-center gap-2">
+              {resourceSubmitting ? <div className="w-5 h-5 border-2 border-slate-700 border-t-transparent rounded-full animate-spin"></div> : <Upload className="h-5 w-5" />}
+              {resourceSubmitting ? 'Uploading...' : 'Upload Resource'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    );
+  };
+
+  // ========== Pending / Suspended screens ==========
   if (tutorStatus === 'pending') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -191,10 +1701,6 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
       </div>
     );
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Suspended screen
-  // ─────────────────────────────────────────────────────────────────────────
   if (tutorStatus === 'suspended') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -221,9 +1727,6 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Loading spinner
-  // ─────────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -235,114 +1738,11 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
     );
   }
 
-  const statCards = [
-    { title: 'Total Students', value: stats.totalStudents, change: '+8 this month', icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { title: 'Courses', value: stats.totalCourses, change: '+2 new', icon: FolderOpen, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { title: 'Resources', value: stats.totalResources, change: '+5 new', icon: FileText, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { title: 'Rating', value: stats.rating.toFixed(1), change: `⭐ ${stats.rating}/5`, icon: Star, color: 'text-amber-600', bg: 'bg-amber-50' },
-  ];
-
-  const DashboardView = () => (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto space-y-8">
-      {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl shadow-indigo-500/20">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <div className="flex items-center space-x-2 mb-2">
-              <span className="px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest backdrop-blur-sm">Tutor Premium</span>
-              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Live</span>
-            </div>
-            <h2 className="text-3xl font-bold tracking-tight">Good {getTimeOfDay()}, {tutor?.name?.split(' ')[0] || 'Tutor'}! 👋</h2>
-            <p className="text-indigo-100 mt-2 max-w-md font-medium opacity-90">
-              You have {upcomingLessons.length} lessons today. Your overall rating is {stats.rating.toFixed(1)}/5.0. Keep inspiring!
-            </p>
-          </div>
-          <button 
-            onClick={() => setActiveView('create-course')}
-            className="flex items-center space-x-2 px-6 py-3 bg-white text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all shadow-lg shadow-indigo-500/20 group"
-          >
-            <Plus className="h-5 w-5 group-hover:rotate-90 transition-transform" />
-            <span>Create New Course</span>
-          </button>
-        </div>
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-        <div className="absolute bottom-0 right-10 opacity-10 pointer-events-none"><BookOpen className="w-64 h-64" /></div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, i) => {
-          const Icon = stat.icon;
-          return (
-            <div key={i} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`${stat.bg} ${stat.color} p-3 rounded-2xl`}><Icon className="h-6 w-6" /></div>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">{stat.change}</span>
-              </div>
-              <p className="text-sm font-medium text-slate-500">{stat.title}</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">{stat.value}</h3>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Today's Lessons */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900">Today's Lessons</h3>
-          <button onClick={() => setActiveView('schedule')} className="text-indigo-600 text-sm font-bold">View Full Schedule</button>
-        </div>
-        <div className="divide-y divide-slate-50">
-          {upcomingLessons.length > 0 ? upcomingLessons.map(lesson => (
-            <div key={lesson.id} className="p-6 flex items-center justify-between hover:bg-slate-50">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600"><Video className="h-6 w-6" /></div>
-                <div>
-                  <h4 className="font-bold text-slate-900">{lesson.title}</h4>
-                  <p className="text-sm text-slate-500">Course: {lesson.course} • {lesson.students} enrolled</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-slate-900">{lesson.time}</p>
-                {lesson.meetingLink && (
-                  <a href={lesson.meetingLink} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700">Join</a>
-                )}
-              </div>
-            </div>
-          )) : <div className="p-12 text-center"><p className="text-slate-500">No lessons scheduled for today</p></div>}
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-lg font-bold text-slate-900 mb-6">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Create Course', icon: Plus, color: 'text-blue-600', bg: 'bg-blue-50', action: () => setActiveView('create-course') },
-            { label: 'Schedule', icon: Calendar, color: 'text-indigo-600', bg: 'bg-indigo-50', action: () => setActiveView('schedule') },
-            { label: 'Messages', icon: MessageSquare, color: 'text-amber-600', bg: 'bg-amber-50', action: () => setActiveView('messages') },
-            { label: 'Settings', icon: Settings, color: 'text-slate-600', bg: 'bg-slate-50', action: () => console.log('Settings') },
-          ].map((action, i) => {
-            const Icon = action.icon;
-            return (
-              <button key={i} onClick={action.action} className="group p-6 bg-white border border-slate-100 rounded-3xl hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5 transition-all text-center">
-                <div className={`${action.bg} ${action.color} w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-                <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">{action.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </motion.div>
-  );
-
+  // ========== Main Layout (with sidebar, header, footer) ==========
   const navLinks = [
     { name: 'Dashboard', icon: Layout, view: 'dashboard', isActive: activeView === 'dashboard' },
     { name: 'My Courses', icon: FolderOpen, view: 'courses', isActive: activeView === 'courses' },
-    { name: 'Schedule', icon: Calendar, view: 'schedule', isActive: activeView === 'schedule' },
+    { name: 'Schedule', icon: CalendarIcon, view: 'schedule', isActive: activeView === 'schedule' },
     { name: 'Create Course', icon: Plus, view: 'create-course', isActive: activeView === 'create-course' },
     { name: 'Messages', icon: MessageSquare, view: 'messages', isActive: activeView === 'messages', badge: unreadMessages },
     { name: 'Resources', icon: FileText, view: 'resources', isActive: false },
@@ -371,7 +1771,13 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
             {navLinks.map((link) => (
               <button
                 key={link.name}
-                onClick={() => link.view && setActiveView(link.view)}
+                onClick={() => {
+                  if (link.view === 'dashboard') goToDashboard();
+                  else if (link.view === 'courses') goToMyCourses();
+                  else if (link.view === 'schedule') goToSchedule();
+                  else if (link.view === 'create-course') goToCreateCourse();
+                  else if (link.view === 'messages') goToMessages();
+                }}
                 className={`flex items-center justify-between w-full px-4 py-3 rounded-xl transition-all text-left ${
                   link.isActive ? 'bg-indigo-600/10 text-indigo-600 font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
@@ -402,7 +1808,6 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="lg:hidden p-2 text-slate-600">
               {isSidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
-
           </div>
           <div className="flex items-center space-x-4">
             <button className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
@@ -432,22 +1837,14 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
           <AnimatePresence mode="wait">
-            {activeView === 'dashboard' && <DashboardView key="dashboard" />}
-            {activeView === 'courses' && (
-              <TutorCourses 
-                key="courses" 
-                onBack={(view) => {
-                  if (view === 'create-course') {
-                    setActiveView('create-course');
-                  } else {
-                    setActiveView('dashboard');
-                  }
-                }} 
-              />
-            )}
-            {activeView === 'schedule' && <TutorSchedule key="schedule" onBack={() => setActiveView('dashboard')} />}
-            {activeView === 'create-course' && <TutorCourseCreate key="create-course" onBack={() => setActiveView('dashboard')} />}
-            {activeView === 'messages' && <TutorMessages key="messages" onBack={() => setActiveView('dashboard')} />}
+            {activeView === 'dashboard' && <div key="dashboard">{renderDashboard()}</div>}
+            {activeView === 'courses' && <div key="courses">{renderMyCourses()}</div>}
+            {activeView === 'create-course' && <div key="create-course">{renderCreateCourse()}</div>}
+            {activeView === 'schedule' && <div key="schedule">{renderSchedule()}</div>}
+            {activeView === 'messages' && <div key="messages">{renderMessages()}</div>}
+            {activeView === 'courseDetail' && <div key="courseDetail">{renderCourseDetail()}</div>}
+            {activeView === 'lessonCreate' && <div key="lessonCreate">{renderLessonCreate()}</div>}
+            {activeView === 'resourceUpload' && <div key="resourceUpload">{renderResourceUpload()}</div>}
           </AnimatePresence>
         </main>
 

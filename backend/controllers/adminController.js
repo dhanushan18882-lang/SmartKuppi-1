@@ -2,14 +2,163 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 
-// @desc    Get all tutors with filters
+// @desc    Create new user (admin, tutor, student)
+// @route   POST /api/admin/users
+// @access  Private (Admin only)
+exports.createUser = async (req, res) => {
+  try {
+    const { 
+      name, email, password, phone, role, status,
+      studentId, university, faculty, department, academicYear,
+      qualifications, specialization, yearsOfExperience, bio, linkedin, subjects
+    } = req.body;
+    
+    // Validate required fields
+    if (!name || !email || !password || !phone) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Please provide all required fields: name, email, password, phone' 
+      });
+    }
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Email already registered' 
+      });
+    }
+    
+    // Hash password manually
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Build user data
+    const userData = {
+      name,
+      email,
+      password: hashedPassword,
+      phone,
+      role
+    };
+    
+    // Set status: Use the status from frontend if provided, otherwise use default
+    if (status) {
+      userData.status = status;
+    } else {
+      // Default status based on role (for self-registration)
+      userData.status = role === 'tutor' ? 'pending' : 'active';
+    }
+    
+    // Add student-specific fields
+    if (role === 'student') {
+      userData.studentId = studentId;
+      userData.university = university;
+      userData.faculty = faculty;
+      userData.department = department;
+      userData.academicYear = academicYear;
+    }
+    
+    // Add tutor-specific fields
+    if (role === 'tutor') {
+      userData.qualifications = qualifications;
+      userData.specialization = specialization;
+      userData.yearsOfExperience = yearsOfExperience;
+      userData.bio = bio;
+      userData.linkedin = linkedin;
+      userData.subjects = subjects || [];
+    }
+    
+    // Create the user
+    const createdUser = await User.create(userData);
+    
+    res.status(201).json({
+      success: true,
+      message: `${role === 'tutor' ? 'Tutor account created' : 'User created'} successfully`,
+      data: {
+        id: createdUser._id,
+        name: createdUser.name,
+        email: createdUser.email,
+        role: createdUser.role,
+        status: createdUser.status
+      }
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Server error' 
+    });
+  }
+};
+
+// @desc    Get single tutor details
+// @route   GET /api/admin/tutor/:id
+// @access  Private (Admin only)
+exports.getTutorDetails = async (req, res) => {
+  try {
+    const tutor = await User.findById(req.params.id).select('-password');
+    
+    if (!tutor || tutor.role !== 'tutor') {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Tutor not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      data: tutor
+    });
+  } catch (error) {
+    console.error('Error fetching tutor details:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+};
+
+// @desc    Get all users with filters
+// @route   GET /api/admin/users
+// @access  Private (Admin only)
+exports.getAllUsers = async (req, res) => {
+  try {
+    const { role, status, search } = req.query;
+    
+    let query = {};
+    
+    if (role && role !== 'all') query.role = role;
+    if (status && status !== 'all') query.status = status;
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    const users = await User.find(query).select('-password').sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      data: users
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error' 
+    });
+  }
+};
+
+// @desc    Get all tutors
 // @route   GET /api/admin/tutors
 // @access  Private (Admin only)
 exports.getTutors = async (req, res) => {
   try {
-    const tutors = await User.find({ role: 'tutor' })
-      .select('-password')
-      .sort({ createdAt: -1 });
+    const tutors = await User.find({ role: 'tutor' }).select('-password').sort({ createdAt: -1 });
     
     res.json({
       success: true,
@@ -52,8 +201,6 @@ exports.updateTutorStatus = async (req, res) => {
       });
     }
 
-    console.log(`Tutor ${tutor.email} status updated to ${status} by admin ${req.user.id}`);
-
     res.json({
       success: true,
       message: `Tutor status updated to ${status}`,
@@ -61,69 +208,6 @@ exports.updateTutorStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating tutor status:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error' 
-    });
-  }
-};
-
-// @desc    Get single tutor details
-// @route   GET /api/admin/tutor/:id
-// @access  Private (Admin only)
-exports.getTutorDetails = async (req, res) => {
-  try {
-    const tutor = await User.findById(req.params.id)
-      .select('-password');
-    
-    if (!tutor || tutor.role !== 'tutor') {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Tutor not found' 
-      });
-    }
-
-    res.json({
-      success: true,
-      data: tutor
-    });
-  } catch (error) {
-    console.error('Error fetching tutor details:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error' 
-    });
-  }
-};
-
-// @desc    Get all users with filters
-// @route   GET /api/admin/users
-// @access  Private (Admin only)
-exports.getAllUsers = async (req, res) => {
-  try {
-    const { role, status, search } = req.query;
-    
-    let query = {};
-    
-    if (role && role !== 'all') query.role = role;
-    if (status && status !== 'all') query.status = status;
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
-    }
-    
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 });
-    
-    res.json({
-      success: true,
-      data: users
-    });
-  } catch (error) {
-    console.error('Error fetching users:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error' 
@@ -154,89 +238,6 @@ exports.getUserById = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Server error' 
-    });
-  }
-};
-
-// @desc    Create new user (admin, tutor, student)
-// @route   POST /api/admin/users
-// @access  Private (Admin only)
-exports.createUser = async (req, res) => {
-  try {
-    const { 
-      name, email, password, phone, role, 
-      studentId, university, faculty, department, academicYear,
-      qualifications, specialization, yearsOfExperience, bio, linkedin, subjects
-    } = req.body;
-    
-    // Validate required fields
-    if (!name || !email || !password || !phone) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Please provide all required fields: name, email, password, phone' 
-      });
-    }
-    
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email already registered' 
-      });
-    }
-    
-      // Hash password manually
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      // Then in userData:
-      const userData = {
-        name,
-        email,
-        password: hashedPassword,   // ✅ use hashed password
-        phone,
-        role,
-        status: role === 'tutor' ? 'pending' : 'active'
-      };
-    // Add student-specific fields
-    if (role === 'student') {
-      userData.studentId = studentId;
-      userData.university = university;
-      userData.faculty = faculty;
-      userData.department = department;
-      userData.academicYear = academicYear;
-    }
-    
-    // Add tutor-specific fields
-    if (role === 'tutor') {
-      userData.qualifications = qualifications;
-      userData.specialization = specialization;
-      userData.yearsOfExperience = yearsOfExperience;
-      userData.bio = bio;
-      userData.linkedin = linkedin;
-      userData.subjects = subjects || [];
-    }
-    
-    // Create the user
-    const createdUser = await User.create(userData);
-    
-    res.status(201).json({
-      success: true,
-      message: `${role === 'tutor' ? 'Tutor application submitted' : 'User created'} successfully`,
-      data: {
-        id: createdUser._id,
-        name: createdUser.name,
-        email: createdUser.email,
-        role: createdUser.role,
-        status: createdUser.status
-      }
-    });
-  } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Server error' 
     });
   }
 };
