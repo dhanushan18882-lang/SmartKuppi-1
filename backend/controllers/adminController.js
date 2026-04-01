@@ -250,8 +250,11 @@ exports.updateUser = async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
     
-    // Don't allow password update through this route
-    delete updateData.password;
+    // If password is provided, hash it
+    if (updateData.password) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(updateData.password, salt);
+    }
     
     const user = await User.findByIdAndUpdate(
       id,

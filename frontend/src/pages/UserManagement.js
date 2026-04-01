@@ -5,7 +5,7 @@ import {
   UserCheck, UserX, Trash2, Edit2, Shield, User,
   GraduationCap, CheckCircle, XCircle, Clock, ChevronLeft,
   ArrowUpRight, Download, X, Award, BookOpen, Briefcase,
-  Building2, Calendar, Globe, Save, AlertCircle, Eye, EyeOff
+  Building2, Calendar, Globe, Save, AlertCircle, Eye, EyeOff, Key 
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -23,6 +23,9 @@ const UserManagement = ({ onBack }) => {
   const [formError, setFormError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [showEditConfirmPassword, setShowEditConfirmPassword] = useState(false);
+  const [changePassword, setChangePassword] = useState(false);
   
   // Add User Form State
   const [newUser, setNewUser] = useState({
@@ -32,18 +35,38 @@ const UserManagement = ({ onBack }) => {
     confirmPassword: '',
     phone: '',
     role: 'student',
-    // Student fields
     studentId: '',
     university: '',
     faculty: '',
+    department: '',
     academicYear: '',
-    // Tutor fields
     qualifications: '',
     specialization: '',
     yearsOfExperience: '',
     bio: '',
     linkedin: '',
     subjects: []
+  });
+
+  // Edit User Form State
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: '',
+    studentId: '',
+    university: '',
+    faculty: '',
+    department: '',
+    academicYear: '',
+    qualifications: '',
+    specialization: '',
+    yearsOfExperience: '',
+    bio: '',
+    linkedin: '',
+    subjects: [],
+    password: '',
+    confirmPassword: ''
   });
 
   const universities = [
@@ -124,6 +147,8 @@ const UserManagement = ({ onBack }) => {
 
   const passwordStrength = checkPasswordStrength(newUser.password);
   const passwordsMatch = newUser.password && newUser.confirmPassword && newUser.password === newUser.confirmPassword;
+  const editPasswordStrength = checkPasswordStrength(editFormData.password);
+  const editPasswordsMatch = editFormData.password && editFormData.confirmPassword && editFormData.password === editFormData.confirmPassword;
 
   useEffect(() => {
     fetchUsers();
@@ -165,101 +190,95 @@ const UserManagement = ({ onBack }) => {
     return emailRegex.test(email);
   };
 
-    const handleAddUser = async (e) => {
+  const handleAddUser = async (e) => {
     e.preventDefault();
     setFormError('');
 
-    // Name validation
     if (!newUser.name.trim()) {
-        setFormError('Name is required');
-        return;
+      setFormError('Name is required');
+      return;
     }
 
-    // Email validation
     if (!newUser.email.trim()) {
-        setFormError('Email is required');
-        return;
+      setFormError('Email is required');
+      return;
     }
     if (!validateEmail(newUser.email)) {
-        setFormError('Please enter a valid email address');
-        return;
+      setFormError('Please enter a valid email address');
+      return;
     }
 
-    // Check if email already exists
     const emailExists = users.some(u => u.email.toLowerCase() === newUser.email.toLowerCase());
     if (emailExists) {
-        setFormError('A user with this email already exists');
-        return;
+      setFormError('A user with this email already exists');
+      return;
     }
 
-    // Password validation
     if (!newUser.password) {
-        setFormError('Password is required');
-        return;
+      setFormError('Password is required');
+      return;
     }
     if (newUser.password.length < 8) {
-        setFormError('Password must be at least 8 characters');
-        return;
+      setFormError('Password must be at least 8 characters');
+      return;
     }
     if (newUser.password !== newUser.confirmPassword) {
-        setFormError('Passwords do not match');
-        return;
+      setFormError('Passwords do not match');
+      return;
     }
 
-    // Password strength validation
     if (passwordStrength.passedCount < 3) {
-        setFormError('Password is too weak. Please use at least 8 characters with uppercase, lowercase, number, or special character.');
-        return;
+      setFormError('Password is too weak. Please use at least 8 characters with uppercase, lowercase, number, or special character.');
+      return;
     }
 
-    // Phone validation
     if (!newUser.phone.trim()) {
-        setFormError('Phone number is required');
-        return;
+      setFormError('Phone number is required');
+      return;
     }
     if (!validatePhone(newUser.phone)) {
-        setFormError('Phone number must start with 0 and be exactly 10 digits (e.g., 0712345678)');
-        return;
+      setFormError('Phone number must start with 0 and be exactly 10 digits (e.g., 0712345678)');
+      return;
     }
 
     // Student validation
     if (newUser.role === 'student') {
-        if (!newUser.studentId.trim()) {
+      if (!newUser.studentId.trim()) {
         setFormError('Student ID is required');
         return;
-        }
-        if (!newUser.university) {
+      }
+      if (!newUser.university) {
         setFormError('University is required');
         return;
-        }
-        if (!newUser.faculty) {
+      }
+      if (!newUser.faculty) {
         setFormError('Faculty is required');
         return;
-        }
-        if (!newUser.academicYear) {
+      }
+      if (!newUser.academicYear) {
         setFormError('Academic Year is required');
         return;
-        }
+      }
     }
 
     // Tutor validation
     if (newUser.role === 'tutor') {
-        if (!newUser.qualifications.trim()) {
+      if (!newUser.qualifications.trim()) {
         setFormError('Qualifications are required');
         return;
-        }
-        if (!newUser.specialization.trim()) {
+      }
+      if (!newUser.specialization.trim()) {
         setFormError('Specialization is required');
         return;
-        }
-        if (!newUser.yearsOfExperience) {
+      }
+      if (!newUser.yearsOfExperience) {
         setFormError('Years of Experience is required');
         return;
-        }
-        if (!newUser.bio.trim()) {
+      }
+      if (!newUser.bio.trim()) {
         setFormError('Bio/Introduction is required');
         return;
-        }
+      }
     }
 
     setFormLoading(true);
@@ -269,42 +288,172 @@ const UserManagement = ({ onBack }) => {
     delete userToSend.confirmPassword;
 
     if (userToSend.role === 'tutor') {
-    userToSend.status = 'approved'; // Admin-created tutors are automatically approved
+      userToSend.status = 'approved';
     } else if (userToSend.role === 'student') {
-    userToSend.status = 'active';
+      userToSend.status = 'active';
     } else if (userToSend.role === 'admin') {
-    userToSend.status = 'active';
+      userToSend.status = 'active';
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/admin/users`, {
+      const response = await fetch(`${API_BASE_URL}/admin/users`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userToSend)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setShowAddModal(false);
+        fetchUsers();
+        setNewUser({
+          name: '', email: '', password: '', confirmPassword: '', phone: '', role: 'student',
+          studentId: '', university: '', faculty: '', department: '', academicYear: '',
+          qualifications: '', specialization: '', yearsOfExperience: '', bio: '', linkedin: '', subjects: []
+        });
+      } else {
+        setFormError(data.message || 'Failed to create user');
+      }
+    } catch (error) {
+      setFormError('Network error. Please try again.');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+    const handleEditUser = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    
+    // Validate password if changePassword is true
+    if (changePassword) {
+        if (!editFormData.password) {
+        setFormError('New password is required');
+        return;
+        }
+        if (editFormData.password.length < 8) {
+        setFormError('Password must be at least 8 characters');
+        return;
+        }
+        if (editPasswordStrength.passedCount < 3) {
+        setFormError('Password is too weak. Please use at least 8 characters with uppercase, lowercase, number, or special character.');
+        return;
+        }
+        if (editFormData.password !== editFormData.confirmPassword) {
+        setFormError('Passwords do not match');
+        return;
+        }
+    }
+    
+    setFormLoading(true);
+    const token = localStorage.getItem('token');
+
+    // Prepare data for API - only include fields that should be updated
+    const userToSend = {
+        name: editFormData.name,
+        email: editFormData.email,
+        phone: editFormData.phone,
+        role: editFormData.role
+    };
+    
+    // Add role-specific fields
+    if (editFormData.role === 'student') {
+        userToSend.studentId = editFormData.studentId;
+        userToSend.university = editFormData.university;
+        userToSend.faculty = editFormData.faculty;
+        userToSend.department = editFormData.department;
+        userToSend.academicYear = editFormData.academicYear;
+    }
+    
+    if (editFormData.role === 'tutor') {
+        userToSend.qualifications = editFormData.qualifications;
+        userToSend.specialization = editFormData.specialization;
+        userToSend.yearsOfExperience = editFormData.yearsOfExperience;
+        userToSend.bio = editFormData.bio;
+        userToSend.linkedin = editFormData.linkedin;
+        userToSend.subjects = editFormData.subjects;
+    }
+    
+    // Add password only if changePassword is true
+    if (changePassword) {
+        userToSend.password = editFormData.password;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/users/${selectedUser._id}`, {
+        method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(userToSend)
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
-        setShowAddModal(false);
+        setShowEditModal(false);
         fetchUsers();
-        setNewUser({
-            name: '', email: '', password: '', confirmPassword: '', phone: '', role: 'student',
-            studentId: '', university: '', faculty: '', department: '', academicYear: '',
-            qualifications: '', specialization: '', yearsOfExperience: '', bio: '', linkedin: '', subjects: []
+        setSelectedUser(null);
+        setChangePassword(false);
+        setEditFormData({
+            name: '',
+            email: '',
+            phone: '',
+            role: '',
+            studentId: '',
+            university: '',
+            faculty: '',
+            department: '',
+            academicYear: '',
+            qualifications: '',
+            specialization: '',
+            yearsOfExperience: '',
+            bio: '',
+            linkedin: '',
+            subjects: [],
+            password: '',
+            confirmPassword: ''
         });
         } else {
-        setFormError(data.message || 'Failed to create user');
+        setFormError(data.message || 'Failed to update user');
         }
     } catch (error) {
+        console.error('Error updating user:', error);
         setFormError('Network error. Please try again.');
     } finally {
         setFormLoading(false);
     }
     };
+
+  const openEditModal = (user) => {
+    setSelectedUser(user);
+    setEditFormData({
+      name: user.name || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      role: user.role || 'student',
+      studentId: user.studentId || '',
+      university: user.university || '',
+      faculty: user.faculty || '',
+      department: user.department || '',
+      academicYear: user.academicYear || '',
+      qualifications: user.qualifications || '',
+      specialization: user.specialization || '',
+      yearsOfExperience: user.yearsOfExperience || '',
+      bio: user.bio || '',
+      linkedin: user.linkedin || '',
+      subjects: user.subjects || [],
+      password: '',
+      confirmPassword: ''
+    });
+    setChangePassword(false);
+    setShowEditModal(true);
+  };
 
   const handleToggleStatus = async (userId, currentStatus) => {
     const token = localStorage.getItem('token');
@@ -481,7 +630,7 @@ const UserManagement = ({ onBack }) => {
                   <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Joined Date</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Last Active</th>
                   <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Actions</th>
-                  </tr>
+                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {loading ? (
@@ -520,6 +669,13 @@ const UserManagement = ({ onBack }) => {
                       <td className="px-6 py-4 text-sm text-slate-500">{user.lastActive || 'Recently'}</td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => openEditModal(user)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
+                            title="Edit User"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
                           <button 
                             onClick={() => handleToggleStatus(user._id, user.status)}
                             className={`p-2 rounded-lg transition-colors ${user.status === 'active' ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
@@ -602,7 +758,7 @@ const UserManagement = ({ onBack }) => {
                   </div>
                 )}
 
-                {/* Basic Info - Always visible */}
+                {/* Basic Info */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Basic Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -776,6 +932,16 @@ const UserManagement = ({ onBack }) => {
                           {academicYears.map(year => <option key={year} value={year}>{year}</option>)}
                         </select>
                       </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Department</label>
+                        <input
+                          type="text"
+                          value={newUser.department}
+                          onChange={(e) => setNewUser({...newUser, department: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                          placeholder="Computer Science"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -861,8 +1027,6 @@ const UserManagement = ({ onBack }) => {
                   </div>
                 )}
 
-                {/* Admin - No additional fields */}
-
                 {/* Form Actions */}
                 <div className="flex gap-3 pt-4 border-t border-slate-100">
                   <button
@@ -879,6 +1043,349 @@ const UserManagement = ({ onBack }) => {
                   >
                     {formLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save className="h-4 w-4" />}
                     {formLoading ? 'Creating...' : 'Create User'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit User Modal */}
+      <AnimatePresence>
+        {showEditModal && selectedUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+            onClick={() => setShowEditModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="sticky top-0 bg-white border-b border-slate-100 p-6 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-slate-900">Edit User</h2>
+                <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditUser} className="p-6 space-y-6">
+                {formError && (
+                  <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex items-center gap-3 text-rose-600">
+                    <AlertCircle className="h-5 w-5" />
+                    <p className="text-sm font-medium">{formError}</p>
+                  </div>
+                )}
+
+                {/* Basic Info */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Basic Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editFormData.name}
+                        onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                        className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                        placeholder="John Doe"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Email *</label>
+                      <input
+                        type="email"
+                        required
+                        value={editFormData.email}
+                        onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                        className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                        placeholder="user@example.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Phone *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={editFormData.phone}
+                        onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
+                        className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                        placeholder="0712345678"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Must start with 0 and be exactly 10 digits</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Role *</label>
+                      <select
+                        value={editFormData.role}
+                        onChange={(e) => setEditFormData({...editFormData, role: e.target.value})}
+                        className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                      >
+                        <option value="student">Student</option>
+                        <option value="tutor">Tutor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password Change Section */}
+                <div className="space-y-4 border-t border-slate-100 pt-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Password</h3>
+                    <button
+                      type="button"
+                      onClick={() => setChangePassword(!changePassword)}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    >
+                      <Key className="h-3 w-3" />
+                      {changePassword ? 'Cancel Password Change' : 'Change Password'}
+                    </button>
+                  </div>
+                  
+                  {changePassword && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">New Password</label>
+                        <div className="relative">
+                          <input
+                            type={showEditPassword ? "text" : "password"}
+                            value={editFormData.password}
+                            onChange={(e) => setEditFormData({...editFormData, password: e.target.value})}
+                            className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all pr-10"
+                            placeholder="••••••••"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowEditPassword(!showEditPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        {editFormData.password && (
+                          <div className="mt-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-300 ${
+                                    editPasswordStrength.score === 1 ? 'w-1/4 bg-rose-500' :
+                                    editPasswordStrength.score === 2 ? 'w-2/4 bg-amber-500' :
+                                    editPasswordStrength.score === 3 ? 'w-3/4 bg-blue-500' :
+                                    editPasswordStrength.score === 4 ? 'w-full bg-emerald-500' : 'w-0'
+                                  }`}
+                                />
+                              </div>
+                              {editPasswordStrength.text && (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${editPasswordStrength.color}`}>
+                                  {editPasswordStrength.text}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-1">Use 8+ chars with uppercase, lowercase, number, or special character</p>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Confirm New Password</label>
+                        <div className="relative">
+                          <input
+                            type={showEditConfirmPassword ? "text" : "password"}
+                            value={editFormData.confirmPassword}
+                            onChange={(e) => setEditFormData({...editFormData, confirmPassword: e.target.value})}
+                            className={`w-full px-4 py-3 bg-slate-50 border-2 rounded-xl focus:outline-none transition-all pr-10 ${
+                              editFormData.confirmPassword && !editPasswordsMatch
+                                ? 'border-rose-300 focus:border-rose-500'
+                                : editFormData.confirmPassword && editPasswordsMatch
+                                ? 'border-emerald-300 focus:border-emerald-500'
+                                : 'border-transparent focus:border-brand-500'
+                            }`}
+                            placeholder="••••••••"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowEditConfirmPassword(!showEditConfirmPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            {showEditConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        {editFormData.confirmPassword && (
+                          <p className={`text-[10px] mt-1 ${editPasswordsMatch ? 'text-emerald-600' : 'text-rose-500'}`}>
+                            {editPasswordsMatch ? '✓ Passwords match' : '✗ Passwords do not match'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Student Specific Fields */}
+                {editFormData.role === 'student' && (
+                  <div className="space-y-4 border-t border-slate-100 pt-4">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Academic Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Student ID</label>
+                        <input
+                          type="text"
+                          value={editFormData.studentId}
+                          onChange={(e) => setEditFormData({...editFormData, studentId: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                          placeholder="IT20XXXXXX"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">University</label>
+                        <select
+                          value={editFormData.university}
+                          onChange={(e) => setEditFormData({...editFormData, university: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                        >
+                          <option value="">Select University</option>
+                          {universities.map(uni => <option key={uni} value={uni}>{uni}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Faculty</label>
+                        <select
+                          value={editFormData.faculty}
+                          onChange={(e) => setEditFormData({...editFormData, faculty: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                        >
+                          <option value="">Select Faculty</option>
+                          {faculties.map(fac => <option key={fac} value={fac}>{fac}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Academic Year</label>
+                        <select
+                          value={editFormData.academicYear}
+                          onChange={(e) => setEditFormData({...editFormData, academicYear: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                        >
+                          <option value="">Select Year</option>
+                          {academicYears.map(year => <option key={year} value={year}>{year}</option>)}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Department</label>
+                        <input
+                          type="text"
+                          value={editFormData.department}
+                          onChange={(e) => setEditFormData({...editFormData, department: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                          placeholder="Computer Science"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tutor Specific Fields */}
+                {editFormData.role === 'tutor' && (
+                  <div className="space-y-4 border-t border-slate-100 pt-4">
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Professional Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Qualifications</label>
+                        <input
+                          type="text"
+                          value={editFormData.qualifications}
+                          onChange={(e) => setEditFormData({...editFormData, qualifications: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                          placeholder="B.Sc. in Computer Science"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Specialization</label>
+                        <input
+                          type="text"
+                          value={editFormData.specialization}
+                          onChange={(e) => setEditFormData({...editFormData, specialization: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                          placeholder="Web Development"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Years of Experience</label>
+                        <input
+                          type="number"
+                          value={editFormData.yearsOfExperience}
+                          onChange={(e) => setEditFormData({...editFormData, yearsOfExperience: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                          placeholder="3"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Bio / Introduction</label>
+                        <textarea
+                          rows={3}
+                          value={editFormData.bio}
+                          onChange={(e) => setEditFormData({...editFormData, bio: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all resize-none"
+                          placeholder="Tell us about your teaching style..."
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">LinkedIn Profile</label>
+                        <input
+                          type="url"
+                          value={editFormData.linkedin}
+                          onChange={(e) => setEditFormData({...editFormData, linkedin: e.target.value})}
+                          className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-brand-500 rounded-xl focus:outline-none transition-all"
+                          placeholder="https://linkedin.com/in/..."
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-1 block">Subjects you can teach</label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {subjectsList.map(subject => (
+                            <label key={subject} className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={editFormData.subjects.includes(subject)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditFormData({...editFormData, subjects: [...editFormData.subjects, subject]});
+                                  } else {
+                                    setEditFormData({...editFormData, subjects: editFormData.subjects.filter(s => s !== subject)});
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                              />
+                              <span className="text-sm text-slate-600">{subject}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Form Actions */}
+                <div className="flex gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="flex-1 py-3 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={formLoading}
+                    className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {formLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <Save className="h-4 w-4" />}
+                    {formLoading ? 'Updating...' : 'Update User'}
                   </button>
                 </div>
               </form>
