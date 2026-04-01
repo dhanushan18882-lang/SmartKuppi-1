@@ -1,14 +1,40 @@
-// routes/authRoutes.js
+// backend/routes/authRoutes.js
 const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
-const { 
+const authController = require('../controllers/authController');
+const forgotPasswordController = require('../controllers/forgotPasswordController');
+const { protect } = require('../middleware/authMiddleware');
+
+// Destructure functions
+const {
   registerStudent,
   registerTutor,
-  login, 
-  getMe 
-} = require('../controllers/authController');
-const { protect } = require('../middleware/authMiddleware');
+  login,
+  getMe,
+  checkEmail
+} = authController;
+
+const {
+  forgotPassword,
+  verifyOTP,
+  resetPassword
+} = forgotPasswordController;
+
+// Debug - check if all functions exist
+console.log('✅ Auth functions loaded:', {
+  registerStudent: !!registerStudent,
+  registerTutor: !!registerTutor,
+  login: !!login,
+  getMe: !!getMe,
+  checkEmail: !!checkEmail
+});
+
+console.log('✅ Forgot password functions loaded:', {
+  forgotPassword: !!forgotPassword,
+  verifyOTP: !!verifyOTP,
+  resetPassword: !!resetPassword
+});
 
 // Student registration validation
 const studentValidation = [
@@ -46,5 +72,9 @@ router.post('/register/student', studentValidation, registerStudent);
 router.post('/register/tutor', tutorValidation, registerTutor);
 router.post('/login', loginValidation, login);
 router.get('/me', protect, getMe);
+router.post('/check-email', checkEmail);
+router.post('/forgot-password', forgotPassword);
+router.post('/verify-otp', verifyOTP);
+router.post('/reset-password', resetPassword);
 
 module.exports = router;

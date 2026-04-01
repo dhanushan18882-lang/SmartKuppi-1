@@ -1,19 +1,20 @@
+// src/pages/ForgotPassword.js
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import emailjs from 'emailjs-com';
 import { 
   Mail, Lock, ArrowLeft, ChevronRight, 
   CheckCircle, AlertCircle, ShieldCheck, 
   Key, RefreshCw, Eye, EyeOff
-} from 'lucide-react'; // Removed GraduationCap
+} from 'lucide-react';
+
+const API_BASE_URL = 'http://localhost:5000/api';
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState('email'); // Removed TypeScript type
+  const [currentStep, setCurrentStep] = useState('email');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [generatedOtp, setGeneratedOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -31,7 +32,8 @@ const ForgotPassword = () => {
     return () => clearInterval(interval);
   }, [timer]);
 
-  const handleSendOtp = async (e) => { // Removed TypeScript type
+  // Step 1: Send OTP using backend
+  const handleSendOtp = async (e) => {
     e.preventDefault();
     if (!email) {
       setError('Please enter your email address');
@@ -41,49 +43,68 @@ const ForgotPassword = () => {
     setIsLoading(true);
     setError('');
 
-    // Generate a 6-digit OTP
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(code);
-
     try {
-      // For demo purposes, we'll log it if keys are missing
-      console.log('Reset Code for', email, 'is:', code);
-
-      // Try to send email if configured
-      if (process.env.REACT_APP_EMAILJS_PUBLIC_KEY) { // Changed from import.meta.env to process.env
-        await emailjs.send(
-          process.env.REACT_APP_EMAILJS_SERVICE_ID,
-          process.env.REACT_APP_EMAILJS_TEMPLATE_ID,
-          {
-            to_email: email,
-            otp_code: code,
-            user_name: email.split('@')[0],
-          },
-          process.env.REACT_APP_EMAILJS_PUBLIC_KEY
-        );
+      // Call backend to generate and send OTP
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      
+      const data = await response.json();
+      console.log('Backend response:', data);
+      
+      if (data.success) {
+        setCurrentStep('otp');
+        setTimer(60);
+      } else {
+        setError(data.message || 'Failed to send reset code');
       }
-
-      setCurrentStep('otp');
-      setTimer(60); // 60 seconds cooldown for resend
     } catch (err) {
-      console.error('EmailJS Error:', err);
-      setError('Failed to send reset code. Please try again later.');
+      console.error('Error:', err);
+      setError('Failed to send reset code. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleVerifyOtp = (e) => { // Removed TypeScript type
+  // Step 2: Verify OTP with backend
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
-    if (otp === generatedOtp || otp === '123456') { // 123456 as a master bypass for testing if needed
-      setCurrentStep('reset');
-      setError('');
-    } else {
-      setError('Invalid verification code');
+    
+    if (!otp) {
+      setError('Please enter the verification code');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp })
+      });
+      
+      const data = await response.json();
+      console.log('Verify response:', data);
+      
+      if (data.success) {
+        setCurrentStep('reset');
+      } else {
+        setError(data.message || 'Invalid verification code');
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError('Failed to verify code. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleResetPassword = (e) => { // Removed TypeScript type
+  // Step 3: Reset password
+  const handleResetPassword = async (e) => {
     e.preventDefault();
     if (newPassword.length < 6) {
       setError('Password must be at least 6 characters');
@@ -95,12 +116,28 @@ const ForgotPassword = () => {
     }
 
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    setError('');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, newPassword })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setCurrentStep('success');
+      } else {
+        setError(data.message || 'Failed to reset password');
+      }
+    } catch (err) {
+      console.error('Reset password error:', err);
+      setError('Failed to reset password. Please try again.');
+    } finally {
       setIsLoading(false);
-      setCurrentStep('success');
-      // In a real app, you'd update the database here
-    }, 1500);
+    }
   };
 
   const stepVariants = {
@@ -111,7 +148,6 @@ const ForgotPassword = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans">
-      {/* Background Decorative Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-100 rounded-full blur-[120px] opacity-50"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-100 rounded-full blur-[120px] opacity-50"></div>
@@ -269,9 +305,10 @@ const ForgotPassword = () => {
 
               <button
                 type="submit"
-                className="w-full relative py-4 px-6 bg-indigo-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:shadow-indigo-300 transition-all active:scale-[0.98]"
+                disabled={isLoading}
+                className="w-full relative py-4 px-6 bg-indigo-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:shadow-indigo-300 transition-all active:scale-[0.98] disabled:opacity-70"
               >
-                Verify Code
+                {isLoading ? <RefreshCw className="h-5 w-5 animate-spin" /> : "Verify Code"}
               </button>
 
               <div className="text-center">
@@ -289,7 +326,7 @@ const ForgotPassword = () => {
             </motion.form>
           )}
 
-          {/* Step 3: Reset */}
+          {/* Step 3: Reset Password */}
           {currentStep === 'reset' && (
             <motion.form 
               key="reset"

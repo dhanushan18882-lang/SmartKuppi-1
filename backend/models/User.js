@@ -11,6 +11,11 @@ const userSchema = new mongoose.Schema({
     default: function() { return this.role === 'tutor' ? 'pending' : 'active'; } },
   profilePicture: { type: String, default: 'default.jpg' },
   createdAt: { type: Date, default: Date.now },
+  
+  // Add OTP fields for password reset
+  resetPasswordOTP: { type: String, default: null },
+  resetPasswordExpires: { type: Date, default: null },
+  
   studentId: { type: String, unique: true, sparse: true,
     required: function() { return this.role === 'student'; } },
   university: { type: String, required: function() { return this.role === 'student'; } },

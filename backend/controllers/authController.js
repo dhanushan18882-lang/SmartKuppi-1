@@ -3,21 +3,21 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
+
 console.log('JWT_SECRET loaded:', process.env.JWT_SECRET ? 'Yes' : 'No');
 console.log('JWT_EXPIRE value:', process.env.JWT_EXPIRE);
 
-// ✅ Add this helper function
+// Helper function
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '7d'  // Uses env, falls back to 7d
+    expiresIn: process.env.JWT_EXPIRE || '7d'
   });
 };
-// ... (generateToken remains same)
 
 // @desc    Register a student
 // @route   POST /api/auth/register/student
 // @access  Public
-exports.registerStudent = async (req, res) => {
+const registerStudent = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -26,22 +26,19 @@ exports.registerStudent = async (req, res) => {
 
     const { name, email, password, phone, studentId, university, faculty, department, academicYear } = req.body;
 
-    // Check existing user
     const existingUser = await User.findOne({ $or: [{ email }, { studentId }] });
     if (existingUser) {
       if (existingUser.email === email) return res.status(400).json({ success: false, message: 'Email already registered' });
       if (existingUser.studentId === studentId) return res.status(400).json({ success: false, message: 'Student ID already exists' });
     }
 
-    // Hash password manually
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user with hashed password
     const user = await User.create({
       name,
       email,
-      password: hashedPassword,   // ✅ store hashed password
+      password: hashedPassword,
       phone,
       role: 'student',
       status: 'active',
@@ -74,7 +71,7 @@ exports.registerStudent = async (req, res) => {
 // @desc    Register a tutor
 // @route   POST /api/auth/register/tutor
 // @access  Public
-exports.registerTutor = async (req, res) => {
+const registerTutor = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -83,19 +80,16 @@ exports.registerTutor = async (req, res) => {
 
     const { name, email, password, phone, qualifications, specialization, yearsOfExperience, bio, linkedin, subjects } = req.body;
 
-    // Check existing user
     const userExists = await User.findOne({ email });
     if (userExists) return res.status(400).json({ success: false, message: 'Email already registered' });
 
-    // Hash password manually
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create tutor with hashed password
     const user = await User.create({
       name,
       email,
-      password: hashedPassword,   // ✅ store hashed password
+      password: hashedPassword,
       phone,
       role: 'tutor',
       status: 'pending',
@@ -126,11 +120,10 @@ exports.registerTutor = async (req, res) => {
   }
 };
 
-
 // @desc    Login user
 // @route   POST /api/auth/login
 // @access  Public
-exports.login = async (req, res) => {
+const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -141,7 +134,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // IMPORTANT: Use select('+password') to include the password field
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(401).json({ 
@@ -150,7 +142,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check if password matches
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({ 
@@ -159,7 +150,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check user status
     if (user.status === 'suspended') {
       return res.status(403).json({ 
         success: false, 
@@ -167,7 +157,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Check if tutor is pending
     if (user.role === 'tutor' && user.status === 'pending') {
       return res.status(403).json({ 
         success: false, 
@@ -175,7 +164,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Generate token
     const token = generateToken(user._id);
 
     res.status(200).json({
@@ -201,7 +189,7 @@ exports.login = async (req, res) => {
 // @desc    Get current logged in user
 // @route   GET /api/auth/me
 // @access  Private
-exports.getMe = async (req, res) => {
+const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     res.status(200).json({
@@ -215,4 +203,43 @@ exports.getMe = async (req, res) => {
       message: error.message 
     });
   }
+};
+
+// @desc    Check if email exists
+// @route   POST /api/auth/check-email
+// @access  Public
+const checkEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+    
+    const user = await User.findOne({ email });
+    
+    res.json({
+      success: true,
+      exists: !!user
+    });
+    
+  } catch (error) {
+    console.error('Check email error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// ✅ Export all functions
+module.exports = {
+  registerStudent,
+  registerTutor,
+  login,
+  getMe,
+  checkEmail
 };

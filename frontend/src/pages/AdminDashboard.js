@@ -516,12 +516,12 @@ const AdminDashboard = () => {
           </button>
           <button
             onClick={() => setActiveView('tutors')}
-            className="flex items-center space-x-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-700 transition-all shadow-md shadow-brand-500/20"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
           >
             <UserCheck className="h-4 w-4" />
             <span>Review Approvals</span>
             {pendingTutors.length > 0 && (
-              <span className="ml-1 px-2 py-0.5 bg-white text-brand-600 text-[10px] font-bold rounded-full">{pendingTutors.length}</span>
+              <span className="ml-1 px-2 py-0.5 bg-white text-emerald-600 text-[10px] font-bold rounded-full">{pendingTutors.length}</span>
             )}
           </button>
         </div>
@@ -907,7 +907,7 @@ const AdminDashboard = () => {
           admin={admin}
           getInitials={getInitials}
           handleLogout={handleLogout}
-          showSearch={activeView === 'dashboard'}
+          showSearch={false}
           title={activeView === 'tutors' ? 'Tutor Approval Management' : activeView === 'users' ? 'User Management' : ''}
         />
 
