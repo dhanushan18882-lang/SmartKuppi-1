@@ -1,5 +1,5 @@
 // src/pages/TutorCourseDetail.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -7,7 +7,7 @@ import {
   Plus, ArrowUpRight, Video, MessageSquare, DollarSign, 
   Settings, LogOut, Menu, X, FileText, Search, Star, AlertCircle,
   ChevronDown, Mail, Phone, Award, CheckCircle, XCircle, GraduationCap,
-  FolderOpen, Inbox, Edit3, Upload,Download, ExternalLink, MoreVertical
+  FolderOpen, Inbox, Edit3, Upload, Download, ExternalLink, MoreVertical
 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -17,7 +17,6 @@ const TutorCourseDetail = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [profileDropdown, setProfileDropdown] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [tutor, setTutor] = useState(null);
   const [course, setCourse] = useState(null);
   const [lessons, setLessons] = useState([]);
@@ -66,50 +65,51 @@ const TutorCourseDetail = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchCourseData = async () => {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-      try {
-        // Fetch course details
-        const courseRes = await fetch(`${API_BASE_URL}/courses/${courseId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const courseData = await courseRes.json();
-        if (courseData.success) setCourse(courseData.data);
+  const fetchCourseData = useCallback(async () => {
+    setLoading(true);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    try {
+      // Fetch course details
+      const courseRes = await fetch(`${API_BASE_URL}/courses/${courseId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const courseData = await courseRes.json();
+      if (courseData.success) setCourse(courseData.data);
 
-        // Fetch lessons
-        const lessonsRes = await fetch(`${API_BASE_URL}/lessons/courses/${courseId}/lessons`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const lessonsData = await lessonsRes.json();
-        if (lessonsData.success) setLessons(lessonsData.data);
+      // Fetch lessons
+      const lessonsRes = await fetch(`${API_BASE_URL}/lessons/courses/${courseId}/lessons`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const lessonsData = await lessonsRes.json();
+      if (lessonsData.success) setLessons(lessonsData.data);
 
-        // Fetch resources
-        const resourcesRes = await fetch(`${API_BASE_URL}/resources/courses/${courseId}/resources`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const resourcesData = await resourcesRes.json();
-        if (resourcesData.success) setResources(resourcesData.data);
+      // Fetch resources
+      const resourcesRes = await fetch(`${API_BASE_URL}/resources/courses/${courseId}/resources`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const resourcesData = await resourcesRes.json();
+      if (resourcesData.success) setResources(resourcesData.data);
 
-        // Fetch enrolled students
-        const studentsRes = await fetch(`${API_BASE_URL}/enrollments/courses/${courseId}/students`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const studentsData = await studentsRes.json();
-        if (studentsData.success) setStudents(studentsData.data);
-      } catch (error) {
-        console.error('Error fetching course data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCourseData();
+      // Fetch enrolled students
+      const studentsRes = await fetch(`${API_BASE_URL}/enrollments/courses/${courseId}/students`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const studentsData = await studentsRes.json();
+      if (studentsData.success) setStudents(studentsData.data);
+    } catch (error) {
+      console.error('Error fetching course data:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [courseId, navigate]);
+
+  useEffect(() => {
+    fetchCourseData();
+  }, [fetchCourseData]);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -255,24 +255,17 @@ const TutorCourseDetail = () => {
               <div className="flex gap-3">
                 <Link
                   to={`/tutor/courses/${courseId}/edit`}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all duration-200 shadow-lg shadow-indigo-200"
                 >
                   <Edit3 className="h-4 w-4" />
-                  <span>Edit Course</span>
+                  <span>Edit Course Content</span>
                 </Link>
                 <Link
                   to={`/tutor/create-lesson?course=${courseId}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-sm font-semibold hover:bg-indigo-100 transition-all duration-200"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Add Lesson</span>
-                </Link>
-                <Link
-                  to={`/tutor/upload-resource?course=${courseId}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  <Upload className="h-4 w-4" />
-                  <span>Upload Resource</span>
                 </Link>
               </div>
             </div>
@@ -303,33 +296,29 @@ const TutorCourseDetail = () => {
                       lessons.map(lesson => (
                         <div key={lesson._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:shadow-md transition-all">
                           <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-bold text-slate-900">{lesson.title}</h3>
-                              <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
-                                <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(lesson.date).toLocaleDateString()}</span>
-                                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatTime(lesson.date)}</span>
-                                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {lesson.duration} min</span>
-                              </div>
+                            <div className="flex items-center gap-4">
+                               <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm"><Video className="h-6 w-6" /></div>
+                               <div>
+                                 <h3 className="font-bold text-slate-900">{lesson.title}</h3>
+                                 <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
+                                   <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(lesson.date).toLocaleDateString()}</span>
+                                   <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatTime(lesson.date)}</span>
+                                   <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {lesson.duration} min</span>
+                                 </div>
+                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <a href={lesson.meetingLink} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all">
+                              <a href={lesson.meetingLink} target="_blank" rel="noopener noreferrer" className="px-5 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md">
                                 Start Session
                               </a>
-                              <button className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg">
-                                <MoreVertical className="h-4 w-4" />
-                              </button>
                             </div>
                           </div>
-                          {lesson.meetingLink && (
-                            <a href={lesson.meetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline mt-2">
-                              <ExternalLink className="h-3 w-3" /> Meeting Link
-                            </a>
-                          )}
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-8">
-                        <p className="text-slate-500">No lessons yet. Click "Add Lesson" to create one.</p>
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400"><Video className="h-8 w-8" /></div>
+                        <p className="text-slate-500 font-medium">No lessons scheduled yet.</p>
                       </div>
                     )}
                   </div>
@@ -340,19 +329,23 @@ const TutorCourseDetail = () => {
                   <div className="space-y-4">
                     {resources.length > 0 ? (
                       resources.map(res => (
-                        <div key={res._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-                          <div>
-                            <h4 className="font-bold text-slate-900">{res.title}</h4>
-                            <p className="text-xs text-slate-500">{res.fileType?.toUpperCase() || 'FILE'} • {res.downloads} downloads</p>
+                        <div key={res._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between hover:shadow-md transition-all">
+                          <div className="flex items-center gap-4">
+                             <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm"><FileText className="h-6 w-6" /></div>
+                             <div>
+                               <h4 className="font-bold text-slate-900">{res.title}</h4>
+                               <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">{res.fileType?.toUpperCase() || 'FILE'} • {res.downloads} downloads</p>
+                             </div>
                           </div>
-                          <a href={`${API_BASE_URL}${res.fileUrl}`} download className="p-2 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors">
+                          <a href={`${API_BASE_URL}${res.fileUrl}`} download className="p-2.5 bg-white text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm border border-slate-200">
                             <Download className="h-5 w-5" />
                           </a>
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-8">
-                        <p className="text-slate-500">No resources yet. You can upload materials later.</p>
+                      <div className="text-center py-12">
+                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400"><FileText className="h-8 w-8" /></div>
+                         <p className="text-slate-500 font-medium">No resources uploaded yet.</p>
                       </div>
                     )}
                   </div>
@@ -363,19 +356,23 @@ const TutorCourseDetail = () => {
                   <div className="space-y-4">
                     {students.length > 0 ? (
                       students.map(enrollment => (
-                        <div key={enrollment._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-                          <div>
-                            <h4 className="font-bold text-slate-900">{enrollment.student?.name || 'Unknown'}</h4>
-                            <p className="text-xs text-slate-500">{enrollment.student?.email || ''}</p>
+                        <div key={enrollment._id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between hover:shadow-md transition-all">
+                          <div className="flex items-center gap-4">
+                             <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-rose-600 shadow-sm"><Users className="h-6 w-6" /></div>
+                             <div>
+                               <h3 className="font-bold text-slate-900">{enrollment.student?.name || 'Unknown'}</h3>
+                               <p className="text-xs text-slate-500 mt-1">{enrollment.student?.email || ''}</p>
+                             </div>
                           </div>
-                          <Link to={`/tutor/messages?student=${enrollment.student._id}&course=${course._id}`} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-                            <MessageSquare className="h-3 w-3 inline mr-1" /> Message
+                          <Link to={`/tutor/messages?student=${enrollment.student._id}&course=${course._id}`} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm">
+                            <MessageSquare className="h-3.5 w-3.5 inline mr-1.5" /> Message
                           </Link>
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-8">
-                        <p className="text-slate-500">No students enrolled yet.</p>
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400"><Users className="h-8 w-8" /></div>
+                        <p className="text-slate-500 font-medium">No students enrolled yet.</p>
                       </div>
                     )}
                   </div>

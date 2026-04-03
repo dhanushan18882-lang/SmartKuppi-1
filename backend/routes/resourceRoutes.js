@@ -10,6 +10,7 @@ router.post('/courses/:courseId/resources', protect, authorize('tutor', 'admin')
 router.get('/courses/:courseId/resources', protect, resourceController.getCourseResources);
 
 router.delete('/resources/:id', protect, authorize('tutor', 'admin'), resourceController.deleteResource);
+router.put('/resources/:id', protect, authorize('tutor', 'admin'), resourceController.updateResource);
 router.put('/resources/:id/download', protect, resourceController.incrementDownload);
 
 // No /file/:id route – files are served statically via /api/uploads/

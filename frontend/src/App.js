@@ -25,6 +25,8 @@ import Resources from './pages/Resources';
 
 
 
+import TutorCourseEdit from './pages/TutorCourseEdit';
+
 // Create a wrapper component to use useNavigate
 const AppRoutes = () => {
   const navigate = useNavigate();
@@ -44,6 +46,7 @@ const AppRoutes = () => {
       <Route path="/tutor/courses" element={<TutorDashboard initialView="courses" />} />
       <Route path="/tutor/create-course" element={<TutorDashboard initialView="create-course" />} />
       <Route path="/tutor/courses/:courseId" element={<TutorCourseDetail />} />
+      <Route path="/tutor/courses/:courseId/edit" element={<TutorCourseEdit />} />
       <Route path="/tutor/messages" element={<TutorDashboard initialView="messages" />} />
       <Route path="/tutor/create-lesson" element={<TutorLessonCreate />} />
       <Route path="/tutor/upload-resource" element={<TutorResourceUpload />} />

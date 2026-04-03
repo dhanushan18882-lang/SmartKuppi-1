@@ -136,6 +136,32 @@ exports.incrementDownload = async (req, res) => {
   }
 };
 
+// @desc    Update a resource (title, description, category only)
+// @route   PUT /api/resources/:id
+// @access  Private (Tutor of the course)
+exports.updateResource = async (req, res) => {
+  try {
+    let resource = await Resource.findById(req.params.id).populate('course');
+    if (!resource) return res.status(404).json({ success: false, message: 'Resource not found' });
+    
+    // Check if user is the tutor of the course or an admin
+    if (resource.course && resource.course.tutor.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const { title, description, category } = req.body;
+    
+    if (title) resource.title = title;
+    if (description !== undefined) resource.description = description;
+    if (category) resource.category = category;
+
+    await resource.save();
+    res.json({ success: true, data: resource });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get all resources
 // @route   GET /api/resources/common
 // @access  Private

@@ -86,13 +86,15 @@ exports.updateCourse = async (req, res) => {
 
 // @desc    Delete a course (and its lessons, resources, enrollments)
 // @route   DELETE /api/courses/:id
-// @access  Private (Tutor who created it or admin)
+// @access  Private (Admin only)
 exports.deleteCourse = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
     if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
-    if (course.tutor.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Not authorized' });
+    
+    // As per user requirement, tutor cannot delete any course. Only admin can.
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Not authorized: Only administrators can delete courses' });
     }
 
     // Delete related data
