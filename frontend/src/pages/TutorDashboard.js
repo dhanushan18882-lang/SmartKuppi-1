@@ -369,9 +369,15 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
           <nav className="flex-1 p-4 space-y-1">
             <p className="px-2 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tutor Menu</p>
             {navLinks.map((link) => (
-              <button
+              <Link
                 key={link.name}
-                onClick={() => link.view && setActiveView(link.view)}
+                to={link.view === 'resources' ? '/tutor/resources' : undefined}
+                onClick={(e) => {
+                  if (link.view && link.view !== 'resources') {
+                    e.preventDefault();
+                    setActiveView(link.view);
+                  }
+                }}
                 className={`flex items-center justify-between w-full px-4 py-3 rounded-xl transition-all text-left ${link.isActive ? 'bg-indigo-600/10 text-indigo-600 font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
               >
@@ -382,7 +388,7 @@ const TutorDashboard = ({ initialView = 'dashboard' }) => {
                 {link.badge > 0 && (
                   <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500 text-white rounded-full">{link.badge}</span>
                 )}
-              </button>
+              </Link>
             ))}
           </nav>
 
