@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Layers, FileText, Video, BookOpen,
-  Download, Eye, ChevronDown, Youtube
+  Download, Eye, ChevronDown, Youtube, User
 } from 'lucide-react';
 import StudentLayout from '../components/StudentLayout';
 
@@ -79,10 +79,19 @@ const ResourceCard = ({ res }) => {
         <span style={{
           display: 'inline-block', marginTop: 4,
           fontSize: 11, fontWeight: 600, padding: '2px 8px',
-          borderRadius: 20, background: cat.bg, color: cat.color
+          borderRadius: 20, background: cat.bg, color: cat.color,
+          marginRight: 6
         }}>
           {cat.label}
         </span>
+        {res.uploadedBy?.name && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 11, fontWeight: 500, color: '#6b7280'
+          }}>
+            <User size={11} /> {res.uploadedBy.name}
+          </span>
+        )}
       </div>
 
       {/* Actions */}
@@ -154,6 +163,48 @@ const CategoryPills = ({ active, onChange }) => (
   </div>
 );
 
+/* ─── Tutor pills ─────────────────────────────────────────── */
+const TutorPills = ({ tutors, active, onChange }) => {
+  if (!tutors || tutors.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+      <button
+        onClick={() => onChange('all')}
+        style={{
+          padding: '4px 12px', borderRadius: 20, fontSize: 12,
+          border: active === 'all' ? '1.5px solid #1d4ed8' : '1px solid #d1d5db',
+          background: active === 'all' ? '#eff6ff' : '#fff',
+          color: active === 'all' ? '#1d4ed8' : '#6b7280',
+          cursor: 'pointer', transition: 'all 0.15s'
+        }}
+      >
+        All Tutors
+      </button>
+      {tutors.map(t => {
+        const isActive = active === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '4px 12px', borderRadius: 20, fontSize: 12,
+              fontWeight: isActive ? 600 : 400, cursor: 'pointer',
+              border: isActive ? '1.5px solid #1d4ed8' : '1px solid #d1d5db',
+              background: isActive ? '#eff6ff' : '#fff',
+              color: isActive ? '#1d4ed8' : '#6b7280',
+              transition: 'all 0.15s'
+            }}
+          >
+            <User size={11} />
+            {t.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 /* ─── Load more ───────────────────────────────────────────── */
 const LoadMore = ({ onClick }) => (
   <div style={{ textAlign: 'center', marginTop: 8 }}>
@@ -174,6 +225,7 @@ const Resources = () => {
   const [commonLoading,  setCommonLoading]  = useState(true);
   const [commonSearch,   setCommonSearch]   = useState('');
   const [commonCategory, setCommonCategory] = useState('all');
+  const [commonTutor,    setCommonTutor]    = useState('all');
   const [commonVisible,  setCommonVisible]  = useState(PAGE_SIZE);
 
   /* ── Subject Resources ── */
@@ -183,6 +235,7 @@ const Resources = () => {
   const [subjectLoading, setSubjectLoading] = useState(false);
   const [subjectSearch,  setSubjectSearch]  = useState('');
   const [subjectCategory,setSubjectCategory]= useState('all');
+  const [subjectTutor,   setSubjectTutor]   = useState('all');
   const [subjectVisible, setSubjectVisible] = useState(PAGE_SIZE);
 
   /* ── Fetch common resources ── */
@@ -234,18 +287,34 @@ const Resources = () => {
   }, [selectedCourse]);
 
   /* ── Client-side filter helper ── */
-  const applyFilter = (list, search, category) =>
+  const applyFilter = (list, search, category, tutor) =>
     list.filter(r => {
-      const matchCat = category === 'all' || r.category === category;
-      const q        = search.toLowerCase();
-      const matchQ   = !q ||
+      const matchCat   = category === 'all' || r.category === category;
+      const matchTutor = tutor === 'all' || r.uploadedBy?._id === tutor;
+      const q          = search.toLowerCase();
+      const matchQ     = !q ||
         r.title.toLowerCase().includes(q) ||
         (r.description || '').toLowerCase().includes(q);
-      return matchCat && matchQ;
+      return matchCat && matchTutor && matchQ;
     });
 
-  const filteredCommon  = applyFilter(commonAll,  commonSearch,  commonCategory);
-  const filteredSubject = applyFilter(subjectAll, subjectSearch, subjectCategory);
+  const getUniqueTutors = (list) => {
+    const tutors = [];
+    const seen   = new Set();
+    list.forEach(r => {
+      if (r.uploadedBy && !seen.has(r.uploadedBy._id)) {
+        seen.add(r.uploadedBy._id);
+        tutors.push({ id: r.uploadedBy._id, name: r.uploadedBy.name });
+      }
+    });
+    return tutors;
+  };
+
+  const filteredCommon  = applyFilter(commonAll,  commonSearch,  commonCategory,  commonTutor);
+  const filteredSubject = applyFilter(subjectAll, subjectSearch, subjectCategory, subjectTutor);
+
+  const commonTutors  = getUniqueTutors(commonAll);
+  const subjectTutors = getUniqueTutors(subjectAll);
 
   const selectedCourseName = courses.find(c => c._id === selectedCourse)?.title || '';
 
@@ -282,6 +351,14 @@ const Resources = () => {
 
           {/* Category pills */}
           <CategoryPills active={commonCategory} onChange={v => { setCommonCategory(v); setCommonVisible(PAGE_SIZE); }} />
+
+          {/* Tutor pills */}
+          {commonTutors.length > 1 && (
+            <div style={{ marginBottom: 14 }}>
+               <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', marginBottom: 6, textTransform: 'uppercase' }}>Filter by Educator</div>
+               <TutorPills tutors={commonTutors} active={commonTutor} onChange={v => { setCommonTutor(v); setCommonVisible(PAGE_SIZE); }} />
+            </div>
+          )}
 
           {/* List */}
           {commonLoading ? (
@@ -356,6 +433,14 @@ const Resources = () => {
           {/* Category pills */}
           {courses.length > 0 && (
             <CategoryPills active={subjectCategory} onChange={v => { setSubjectCategory(v); setSubjectVisible(PAGE_SIZE); }} />
+          )}
+
+          {/* Tutor pills */}
+          {subjectTutors.length > 1 && (
+            <div style={{ marginBottom: 14 }}>
+               <div style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', marginBottom: 6, textTransform: 'uppercase' }}>Filter by Educator</div>
+               <TutorPills tutors={subjectTutors} active={subjectTutor} onChange={v => { setSubjectTutor(v); setSubjectVisible(PAGE_SIZE); }} />
+            </div>
           )}
 
           {/* List */}

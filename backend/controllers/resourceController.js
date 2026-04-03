@@ -90,7 +90,7 @@ exports.getCourseResources = async (req, res) => {
     }
     if (!canView) return res.status(403).json({ success: false, message: 'Not authorized' });
 
-    const resources = await Resource.find({ course: courseId }).sort('-createdAt');
+    const resources = await Resource.find({ course: courseId }).sort('-createdAt').populate('uploadedBy', 'name');
     res.json({ success: true, data: resources });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
